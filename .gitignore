@@ -1,8 +1,8 @@
 # Ignore wallet directory
-wallet/
+/wallet
 
 # Ignore keystore directory
-keystore/
+/keystore
 
 # Ignore environment variables file
 .env
