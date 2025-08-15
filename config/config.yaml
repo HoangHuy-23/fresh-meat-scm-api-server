@@ -1,0 +1,20 @@
+# config/config.yaml
+server:
+  port: "8080"
+
+fabric:
+  channelName: "meatchannel"
+  chaincodeName: "meatcc"
+  orgName: "MeatSupplyOrg"
+  userName: "User1"
+
+  # Đường dẫn đến file connection profile (tương đối với thư mục server)
+  connectionProfile: "./connection-profile.yaml"
+
+  # === QUAN TRỌNG: CẬP NHẬT CÁC ĐƯỜNG DẪN NÀY ===
+  # Đường dẫn tuyệt đối hoặc tương đối đến thư mục crypto-config của repo blockchain
+  cryptoPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config"
+
+  # Đường dẫn đến cert và key của user mà API server sẽ sử dụng
+  userCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/User1@meatsupply.example.com/msp/signcerts/cert.pem"
+  userKeyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/User1@meatsupply.example.com/msp/keystore/"

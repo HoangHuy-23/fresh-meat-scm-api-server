@@ -1,0 +1,41 @@
+# connection-profile.yaml
+name: "fresh-meat-network"
+version: "1.0.0"
+
+client:
+  organization: MeatSupplyOrg
+
+organizations:
+  MeatSupplyOrg:
+    mspid: MeatSupplyOrgMSP
+    peers:
+      - peer0.meatsupply.example.com
+    certificateAuthorities:
+      - ca.meatsupply.example.com
+
+peers:
+  peer0.meatsupply.example.com:
+    url: grpcs://localhost:7051
+    tlsCACerts:
+      # === QUAN TRỌNG: CẬP NHẬT ĐƯỜNG DẪN NÀY ===
+      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt
+    grpcOptions:
+      ssl-target-name-override: peer0.meatsupply.example.com
+
+  peer0.regulator.example.com:
+    url: grpcs://localhost:9051
+    tlsCACerts:
+      # === QUAN TRỌNG: CẬP NHẬT ĐƯỜNG DẪN NÀY ===
+      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/peers/peer0.regulator.example.com/tls/ca.crt
+    grpcOptions:
+      ssl-target-name-override: peer0.regulator.example.com
+
+certificateAuthorities:
+  ca.meatsupply.example.com:
+    url: https://localhost:7054
+    caName: ca.meatsupply.example.com
+    tlsCACerts:
+      # === QUAN TRỌNG: CẬP NHẬT ĐƯỜNG DẪN NÀY ===
+      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/meatsupply/ca-cert.pem
+    httpOptions:
+      verify: false
