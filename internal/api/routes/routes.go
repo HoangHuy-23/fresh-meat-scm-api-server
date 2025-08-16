@@ -13,28 +13,36 @@ func SetupRouter(fabricSetup *blockchain.FabricSetup) *gin.Engine {
 
 	// Khởi tạo các handlers
 	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup}
-	eventHandler := &handlers.EventHandler{Fabric: fabricSetup}
+	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup}
 
-	// Định nghĩa các group API
 	apiV1 := router.Group("/api/v1")
 	{
+		// Nhóm các API liên quan đến tài sản (lô hàng, sản phẩm)
 		assets := apiV1.Group("/assets")
 		{
-			// Tạo một lô nông trại mới
-			// POST /api/v1/assets/farming
+			// --- Nghiệp vụ tạo và cập nhật tại nguồn ---
 			assets.POST("/farming", assetHandler.CreateFarmingBatch)
-
-			// Chế biến và tách một lô
-			// POST /api/v1/assets/split
+			assets.PUT("/:id/farming-details", assetHandler.UpdateFarmingDetails) // <-- ENDPOINT MỚI
 			assets.POST("/split", assetHandler.ProcessAndSplitBatch)
 
-			// Lấy lịch sử truy xuất đầy đủ của một tài sản
-			// GET /api/v1/assets/:id/history
-			assets.GET("/:id/history", assetHandler.GetAssetHistory)
+			// --- Nghiệp vụ cập nhật trạng thái & thông tin tại các điểm khác ---
+			assets.POST("/:id/storage", assetHandler.UpdateStorageInfo)
+			assets.POST("/:id/sell", assetHandler.MarkAsSold)
 
-			// Thêm một sự kiện mới vào một tài sản đã tồn tại
-			// POST /api/v1/assets/:id/events
-			assets.POST("/:id/events", eventHandler.AddEvent)
+			// --- Nghiệp vụ Retail split to units
+			assets.POST("/split-to-units", assetHandler.SplitBatchToUnits)
+
+			// --- Nghiệp vụ truy xuất ---
+			assets.GET("/:id/trace", assetHandler.GetAssetTrace)
+		}
+
+		// Nhóm các API liên quan đến vận chuyển
+		shipments := apiV1.Group("/shipments")
+		{
+			shipments.POST("/", shipmentHandler.CreateShipment)
+			shipments.POST("/:id/load", shipmentHandler.LoadItem)
+			shipments.POST("/:id/start", shipmentHandler.StartShipment)
+			shipments.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
 		}
 	}
 
