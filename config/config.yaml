@@ -6,7 +6,7 @@ fabric:
   channelName: "meatchannel"
   chaincodeName: "meatcc"
   orgName: "MeatSupplyOrg"
-  userName: "User1"
+  userName: "ApiServer"
 
   # Đường dẫn đến file connection profile (tương đối với thư mục server)
   connectionProfile: "./connection-profile.yaml"
@@ -16,5 +16,5 @@ fabric:
   cryptoPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config"
 
   # Đường dẫn đến cert và key của user mà API server sẽ sử dụng
-  userCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/User1@meatsupply.example.com/msp/signcerts/cert.pem"
-  userKeyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/User1@meatsupply.example.com/msp/keystore/"
+  userCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/ApiServer@meatsupply.example.com/msp/signcerts/cert.pem"
+  userKeyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/ApiServer@meatsupply.example.com/msp/keystore/"
