@@ -8,6 +8,7 @@ import (
 	"fresh-meat-scm-api-server/internal/ca"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // SetupRouter nhận vào các thành phần phụ thuộc và thiết lập các route
@@ -15,13 +16,14 @@ func SetupRouter(
 	fabricSetup *blockchain.FabricSetup,
 	caService *ca.CAService,
 	cfg config.Config,
+	db *mongo.Database,
 ) *gin.Engine {
 	router := gin.Default()
 
 	// Khởi tạo các handlers với đúng các thành phần chúng cần
 	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup}
 	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup}
-	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.OrgName}
+	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.OrgName, DB: db}
 
 	apiV1 := router.Group("/api/v1")
 	{
@@ -42,6 +44,12 @@ func SetupRouter(
 			shipments.POST("/:id/load", shipmentHandler.LoadItem)
 			shipments.POST("/:id/start", shipmentHandler.StartShipment)
 			shipments.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
+		}
+
+		// Nhóm các API authentication
+		auth := apiV1.Group("/auth")
+		{
+			auth.POST("/login", userHandler.Login)
 		}
 
 		// Nhóm các API quản trị

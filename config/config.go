@@ -8,6 +8,10 @@ import (
 // Config struct holds all configuration for the application.
 type Config struct {
 	ServerPort        string `mapstructure:"port"`
+	MongoURI          string `mapstructure:"uri"`
+	MongoDBName      string `mapstructure:"dbName"`
+	JWTSecretKey      string `mapstructure:"secret"`
+	JWTExpirationTime string `mapstructure:"expiration"`
 	ChannelName       string `mapstructure:"channelName"`
 	ChaincodeName     string `mapstructure:"chaincodeName"`
 	OrgName           string `mapstructure:"orgName"`
@@ -39,6 +43,22 @@ func LoadConfig(path string) (config Config, err error) {
 		return
 	}
 
+	var mongoConfig struct {
+		Mongo Config `mapstructure:"mongo"`
+	}
+	err = viper.Unmarshal(&mongoConfig)
+	if err != nil {
+		return
+	}
+
+	var jwtConfig struct {
+		JWT Config `mapstructure:"jwt"`
+	}
+	err = viper.Unmarshal(&jwtConfig)
+	if err != nil {
+		return
+	}
+
 	var fabricConfig struct {
 		Fabric Config `mapstructure:"fabric"`
 	}
@@ -46,9 +66,14 @@ func LoadConfig(path string) (config Config, err error) {
 	if err != nil {
 		return
 	}
+
 	
 	// Combine the structs
 	config = serverConfig.Server
+	config.MongoURI = mongoConfig.Mongo.MongoURI
+	config.MongoDBName = mongoConfig.Mongo.MongoDBName
+	config.JWTSecretKey = jwtConfig.JWT.JWTSecretKey
+	config.JWTExpirationTime = jwtConfig.JWT.JWTExpirationTime
 	config.ChannelName = fabricConfig.Fabric.ChannelName
 	config.ChaincodeName = fabricConfig.Fabric.ChaincodeName
 	config.OrgName = fabricConfig.Fabric.OrgName

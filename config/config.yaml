@@ -1,21 +1,20 @@
 # config/config.yaml
-
 server:
   port: "8080"
 
+mongo:
+  uri: "mongodb+srv://adminscm:DegAQTucutHGm0nn@admin.wubocek.mongodb.net/fresh-meat-scm?retryWrites=true&w=majority&appName=admin"
+  dbName: "fresh-meat-scm"
+
+jwt:
+  secret: "your_jwt_secret"
+  expiration: "24h"
+
 fabric:
-  # Thông tin về channel và chaincode
   channelName: "meatchannel"
-  chaincodeName: "meatcc"
-  
-  # Thông tin về tổ chức và danh tính superadmin 
+  chaincodeName: "meatcc" 
   orgName: "MeatSupplyOrg"
-  userName: "superadmin" # Danh tính mà API server dùng để khởi động
-  
-  # Đường dẫn đến file connection profile (tương đối với thư mục gốc của server)
+  userName: "superadmin"
   connectionProfile: "./connection-profile.yaml"
-  
-  # === QUAN TRỌNG: CẬP NHẬT CÁC ĐƯỜNG DẪN TUYỆT ĐỐI NÀY ===
-  # Đường dẫn đến cert và key của SuperAdmin
   userCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem"
   userKeyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/"
