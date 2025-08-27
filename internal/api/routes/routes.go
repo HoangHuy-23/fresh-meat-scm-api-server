@@ -5,17 +5,15 @@ import (
 	"fresh-meat-scm-api-server/config"
 	"fresh-meat-scm-api-server/internal/api/handlers"
 	"fresh-meat-scm-api-server/internal/blockchain"
+	"fresh-meat-scm-api-server/internal/ca"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
-	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
 )
 
 // SetupRouter nhận vào các thành phần phụ thuộc và thiết lập các route
 func SetupRouter(
 	fabricSetup *blockchain.FabricSetup,
-	sdk *fabsdk.FabricSDK,
-	wallet *gateway.Wallet,
+	caService *ca.CAService,
 	cfg config.Config,
 ) *gin.Engine {
 	router := gin.Default()
@@ -23,7 +21,7 @@ func SetupRouter(
 	// Khởi tạo các handlers với đúng các thành phần chúng cần
 	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup}
 	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup}
-	adminHandler := &handlers.AdminHandler{SDK: sdk, Wallet: wallet, Config: cfg}
+	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.OrgName}
 
 	apiV1 := router.Group("/api/v1")
 	{
@@ -45,12 +43,14 @@ func SetupRouter(
 			shipments.POST("/:id/start", shipmentHandler.StartShipment)
 			shipments.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
 		}
+
+		// Nhóm các API quản trị
+        admin := apiV1.Group("/admin")
+        {
+            admin.POST("/users", userHandler.CreateUser)
+        }
 	}
 
-	adminAPI := router.Group("/admin")
-	{
-		adminAPI.POST("/users", adminHandler.RegisterUser)
-	}
 
 	return router
 }

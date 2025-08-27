@@ -5,38 +5,16 @@ import (
 	"github.com/spf13/viper"
 )
 
-// --- Định nghĩa các struct con để khớp với cấu trúc của config.yaml ---
-
-type ServerConfig struct {
-	Port string `mapstructure:"port"`
-}
-
-type SuperAdminConfig struct {
-	OrgName  string `mapstructure:"orgName"`
-	UserName string `mapstructure:"userName"`
-	CertPath string `mapstructure:"certPath"`
-	KeyDir   string `mapstructure:"keyDir"`
-}
-
-type CAConfig struct {
-	URL         string `mapstructure:"url"`
-	CaName      string `mapstructure:"caName"`
-	TlsCertPath string `mapstructure:"tlsCertPath"`
-}
-
-type FabricConfig struct {
-	ChannelName       string           `mapstructure:"channelName"`
-	ChaincodeName     string           `mapstructure:"chaincodeName"`
-	ConnectionProfile string           `mapstructure:"connectionProfile"`
-	SuperAdmin        SuperAdminConfig `mapstructure:"superAdmin"`
-	CA                CAConfig         `mapstructure:"ca"`
-}
-
-// --- Struct Config chính, chứa tất cả các struct con ---
-
+// Config struct holds all configuration for the application.
 type Config struct {
-	Server ServerConfig `mapstructure:"server"`
-	Fabric FabricConfig `mapstructure:"fabric"`
+	ServerPort        string `mapstructure:"port"`
+	ChannelName       string `mapstructure:"channelName"`
+	ChaincodeName     string `mapstructure:"chaincodeName"`
+	OrgName           string `mapstructure:"orgName"`
+	UserName          string `mapstructure:"userName"`
+	ConnectionProfile string `mapstructure:"connectionProfile"`
+	UserCertPath      string `mapstructure:"userCertPath"`
+	UserKeyDir        string `mapstructure:"userKeyDir"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
@@ -52,7 +30,32 @@ func LoadConfig(path string) (config Config, err error) {
 		return
 	}
 
-	// Unmarshal toàn bộ file config vào struct Config chính
-	err = viper.Unmarshal(&config)
+	// Unmarshal the config into the struct
+	var serverConfig struct {
+		Server Config `mapstructure:"server"`
+	}
+	err = viper.Unmarshal(&serverConfig)
+	if err != nil {
+		return
+	}
+
+	var fabricConfig struct {
+		Fabric Config `mapstructure:"fabric"`
+	}
+	err = viper.Unmarshal(&fabricConfig)
+	if err != nil {
+		return
+	}
+	
+	// Combine the structs
+	config = serverConfig.Server
+	config.ChannelName = fabricConfig.Fabric.ChannelName
+	config.ChaincodeName = fabricConfig.Fabric.ChaincodeName
+	config.OrgName = fabricConfig.Fabric.OrgName
+	config.UserName = fabricConfig.Fabric.UserName
+	config.ConnectionProfile = fabricConfig.Fabric.ConnectionProfile
+	config.UserCertPath = fabricConfig.Fabric.UserCertPath
+	config.UserKeyDir = fabricConfig.Fabric.UserKeyDir
+
 	return
 }

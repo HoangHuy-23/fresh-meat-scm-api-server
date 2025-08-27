@@ -6,45 +6,60 @@ import (
 	"os"
 	"path/filepath"
 	"fresh-meat-scm-api-server/config"
-	// "fresh-meat-scm-api-server/internal/wallet" // Không cần import wallet nữa
+	"fresh-meat-scm-api-server/internal/wallet"
 
 	fabconfig "github.com/hyperledger/fabric-sdk-go/pkg/core/config"
+	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
 )
 
 type FabricSetup struct {
 	Gateway  *gateway.Gateway
-	Network  *gateway.Network
 	Contract *gateway.Contract
+	SDK      *fabsdk.FabricSDK
+	Wallet   *gateway.Wallet // <-- THÊM WALLET VÀO STRUCT
 }
 
-// Initialize tạo kết nối gateway cho một user cụ thể.
-func Initialize(cfg config.Config, wallet *gateway.Wallet, userName string) (*FabricSetup, error) {
+func Initialize(cfg config.Config) (*FabricSetup, error) {
 	os.Setenv("DISCOVERY_AS_LOCALHOST", "true")
 
-	// Không cần tạo wallet ở đây nữa, nó được truyền vào từ main
-
-	// Không cần populate wallet ở đây nữa, nó được thực hiện ở main
-
-	gw, err := gateway.Connect(
-		gateway.WithConfig(fabconfig.FromFile(filepath.Clean(cfg.Fabric.ConnectionProfile))),
-		gateway.WithIdentity(wallet, userName),
-	)
+	fsWallet, err := gateway.NewFileSystemWallet("wallet")
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to gateway as %s: %w", userName, err)
+		return nil, fmt.Errorf("failed to create wallet: %w", err)
 	}
 
-	network, err := gw.GetNetwork(cfg.Fabric.ChannelName)
+	err = wallet.PopulateWallet(fsWallet, cfg.OrgName, cfg.UserName, cfg.UserCertPath, cfg.UserKeyDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to populate wallet for admin: %w", err)
+	}
+
+	sdk, err := fabsdk.New(fabconfig.FromFile(filepath.Clean(cfg.ConnectionProfile)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create fabsdk instance: %w", err)
+	}
+
+	gw, err := gateway.Connect(
+		gateway.WithSDK(sdk),
+		gateway.WithIdentity(fsWallet, cfg.UserName),
+	)
+	if err != nil {
+		sdk.Close()
+		return nil, fmt.Errorf("failed to connect to gateway: %w", err)
+	}
+
+	network, err := gw.GetNetwork(cfg.ChannelName)
 	if err != nil {
 		gw.Close()
+		sdk.Close()
 		return nil, fmt.Errorf("failed to get network: %w", err)
 	}
 
-	contract := network.GetContract(cfg.Fabric.ChaincodeName)
+	contract := network.GetContract(cfg.ChaincodeName)
 
 	return &FabricSetup{
 		Gateway:  gw,
-		Network:  network,
 		Contract: contract,
+		SDK:      sdk,
+		Wallet:   fsWallet, // <-- TRẢ VỀ WALLET
 	}, nil
 }

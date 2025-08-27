@@ -1,24 +1,21 @@
 # config/config.yaml
+
 server:
   port: "8080"
 
 fabric:
+  # Thông tin về channel và chaincode
   channelName: "meatchannel"
   chaincodeName: "meatcc"
-
-  # === THÔNG TIN SUPER ADMIN ===
-  superAdmin:
-    orgName: "MeatSupplyOrg"
-    userName: "superadmin"
-    certPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem"
-    keyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/"
-
-
-  # Thông tin CA để đăng ký user mới
-  ca:
-    url: "https://localhost:7054"
-    caName: "ca.meatsupply.example.com"
-    tlsCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/meatsupply/ca-cert.pem"
-
-  # Đường dẫn đến file connection profile (tương đối với thư mục server)
+  
+  # Thông tin về tổ chức và danh tính superadmin 
+  orgName: "MeatSupplyOrg"
+  userName: "superadmin" # Danh tính mà API server dùng để khởi động
+  
+  # Đường dẫn đến file connection profile (tương đối với thư mục gốc của server)
   connectionProfile: "./connection-profile.yaml"
+  
+  # === QUAN TRỌNG: CẬP NHẬT CÁC ĐƯỜNG DẪN TUYỆT ĐỐI NÀY ===
+  # Đường dẫn đến cert và key của SuperAdmin
+  userCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem"
+  userKeyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/"
