@@ -14,13 +14,13 @@ client:
       response: 180s
       discovery:
         greylistExpiry: 10s
-  
+
   # Event service timeout
   eventService:
     timeout:
       connection: 15s
       registrationResponse: 15s
-  
+
   # Order timeout
   order:
     timeout:
@@ -39,16 +39,15 @@ client:
       channelConfig: 30s
       channelMembership: 30s
 
-
 # =================================================================
 # MỤC MỚI QUAN TRỌNG: CHANNELS
 # =================================================================
 channels:
   meatchannel:
     orderers:
-     - orderer1.meatsupply.example.com
-     - orderer2.meatsupply.example.com
-     - orderer3.regulator.example.com
+      - orderer1.meatsupply.example.com
+      - orderer2.meatsupply.example.com
+      - orderer3.regulator.example.com
     peers:
       peer0.meatsupply.example.com:
         endorsingPeer: true
@@ -70,10 +69,10 @@ organizations:
       - ca.meatsupply.example.com
     users:
       superadmin:
-        cert: 
+        cert:
           path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem
-        key: 
-          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/595e7f0b24a4673641d0066b164da10ad1d42003d39971532a0a88a5588df461_sk
+        key:
+          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/17627360525d4b077f1613292875153bd63c94161d9d473ebb6901f1ae0cb2c6_sk
   # Thêm định nghĩa cho RegulatorOrg để SDK biết về nó
   RegulatorOrg:
     mspid: RegulatorOrgMSP
@@ -83,10 +82,10 @@ organizations:
       - ca.regulator.example.com
     users:
       admin:
-        cert: 
+        cert:
           path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp/signcerts/cert.pem
-        key: 
-          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp/keystore/0553791b8513fd57d18a10fbbca5f1a8daa015ce42b5b771b1e0192c11015a40_sk
+        key:
+          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp/keystore/ee55319fae03da2ee01d0e391d07e07f5f13d7492137dbee3aa713d5fd71daba_sk
 
 orderers:
   orderer1.meatsupply.example.com:
