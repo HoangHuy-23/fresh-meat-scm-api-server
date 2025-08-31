@@ -63,3 +63,16 @@ func Initialize(cfg config.Config) (*FabricSetup, error) {
 		Wallet:   fsWallet, // <-- TRẢ VỀ WALLET
 	}, nil
 }
+
+// GetGatewayForUser creates a new Gateway connection using a specific user's identity.
+func (fs *FabricSetup) GetGatewayForUser(userName string) (*gateway.Gateway, error) {
+	// Tái sử dụng SDK và Wallet đã được khởi tạo
+	gw, err := gateway.Connect(
+		gateway.WithSDK(fs.SDK),
+		gateway.WithIdentity(fs.Wallet, userName),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to gateway for user %s: %w", userName, err)
+	}
+	return gw, nil
+}

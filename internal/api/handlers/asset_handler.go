@@ -3,14 +3,19 @@ package handlers
 
 import (
 	"encoding/json"
-	"net/http"
-	"fresh-meat-scm-api-server/internal/blockchain"
 	"fmt"
+	"net/http"
+	"fresh-meat-scm-api-server/config"
+	"fresh-meat-scm-api-server/internal/blockchain"
+
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AssetHandler struct {
 	Fabric *blockchain.FabricSetup
+	Cfg    config.Config
+	DB     *mongo.Database
 }
 
 // --- Structs cho Request Body ---
@@ -39,45 +44,69 @@ type ProcessAndSplitBatchRequest struct {
 	Details       json.RawMessage      `json:"details" binding:"required"`
 }
 
-// GenericDetailsRequest can be used for simple requests with a 'details' body.
-type GenericDetailsRequest struct {
-	Details json.RawMessage `json:"details" binding:"required"`
-}
-
-// SplitBatchToUnitsRequest: Struct mới, đơn giản hơn
 type SplitBatchToUnitsRequest struct {
 	ParentAssetID string `json:"parentAssetID" binding:"required"`
-	UnitCount     int    `json:"unitCount" binding:"required,gt=0"` // gt=0: phải lớn hơn 0
+	UnitCount     int    `json:"unitCount" binding:"required,gt=0"`
 	UnitIDPrefix  string `json:"unitIDPrefix" binding:"required"`
+}
+
+type GenericDetailsRequest struct {
+	Details json.RawMessage `json:"details" binding:"required"`
 }
 
 // --- Handlers ---
 
 func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.ChaincodeName)
+
 	var req CreateFarmingBatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	quantityJSON, _ := json.Marshal(req.Quantity)
 
-	_, err := h.Fabric.Contract.SubmitTransaction(
-		"CreateFarmingBatch",
-		req.AssetID,
-		req.ProductName,
-		string(quantityJSON),
-		string(req.Details),
-	)
+	_, err = contract.SubmitTransaction("CreateFarmingBatch", req.AssetID, req.ProductName, string(quantityJSON), string(req.Details))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusCreated, gin.H{"status": "success", "assetID": req.AssetID})
 }
 
 func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.ChaincodeName)
+
 	assetID := c.Param("id")
 	var req GenericDetailsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -85,7 +114,7 @@ func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {
 		return
 	}
 
-	_, err := h.Fabric.Contract.SubmitTransaction("UpdateFarmingDetails", assetID, string(req.Details))
+	_, err = contract.SubmitTransaction("UpdateFarmingDetails", assetID, string(req.Details))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
@@ -94,33 +123,56 @@ func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {
 }
 
 func (h *AssetHandler) ProcessAndSplitBatch(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.ChaincodeName)
+
 	var req ProcessAndSplitBatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	childAssetsJSON, _ := json.Marshal(req.ChildAssets)
 
-	_, err := h.Fabric.Contract.SubmitTransaction(
-		"ProcessAndSplitBatch",
-		req.ParentAssetID,
-		string(childAssetsJSON),
-		string(req.Details),
-	)
+	_, err = contract.SubmitTransaction("ProcessAndSplitBatch", req.ParentAssetID, string(childAssetsJSON), string(req.Details))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"status": "success", "parentAssetID": req.ParentAssetID})
 }
 
-// ===============================================================
-// HÀM BỊ THIẾU ĐÃ ĐƯỢC BỔ SUNG
-// ===============================================================
-// UpdateStorageInfo handles the API endpoint for updating storage conditions.
 func (h *AssetHandler) UpdateStorageInfo(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.ChaincodeName)
+
 	assetID := c.Param("id")
 	var req GenericDetailsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -128,16 +180,32 @@ func (h *AssetHandler) UpdateStorageInfo(c *gin.Context) {
 		return
 	}
 
-	_, err := h.Fabric.Contract.SubmitTransaction("UpdateStorageInfo", assetID, string(req.Details))
+	_, err = contract.SubmitTransaction("UpdateStorageInfo", assetID, string(req.Details))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Storage info updated for asset " + assetID})
 }
-// ===============================================================
 
 func (h *AssetHandler) MarkAsSold(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.ChaincodeName)
+
 	assetID := c.Param("id")
 	var req GenericDetailsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -145,7 +213,7 @@ func (h *AssetHandler) MarkAsSold(c *gin.Context) {
 		return
 	}
 
-	_, err := h.Fabric.Contract.SubmitTransaction("MarkAsSold", assetID, string(req.Details))
+	_, err = contract.SubmitTransaction("MarkAsSold", assetID, string(req.Details))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
@@ -153,35 +221,44 @@ func (h *AssetHandler) MarkAsSold(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Asset " + assetID + " marked as sold"})
 }
 
-func (h *AssetHandler) GetAssetTrace(c *gin.Context) {
-	assetID := c.Param("id")
+func (h *AssetHandler) SplitBatchToUnits(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
 
-	result, err := h.Fabric.Contract.EvaluateTransaction("GetAssetWithFullHistory", assetID)
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found or error evaluating transaction", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
 		return
 	}
+	defer userGateway.Close()
 
-	c.Data(http.StatusOK, "application/json", result)
-}
+	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.ChaincodeName)
 
-func (h *AssetHandler) SplitBatchToUnits(c *gin.Context) {
 	var req SplitBatchToUnitsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	_, err := h.Fabric.Contract.SubmitTransaction(
-		"SplitBatchToUnits",
-		req.ParentAssetID,
-		fmt.Sprintf("%d", req.UnitCount), // Chuyển int thành string
-		req.UnitIDPrefix,
-	)
+	_, err = contract.SubmitTransaction("SplitBatchToUnits", req.ParentAssetID, fmt.Sprintf("%d", req.UnitCount), req.UnitIDPrefix)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": fmt.Sprintf("%d units created from batch %s", req.UnitCount, req.ParentAssetID)})
+}
+
+func (h *AssetHandler) GetAssetTrace(c *gin.Context) {
+	// Query can use the default gateway connection for simplicity
+	result, err := h.Fabric.Contract.EvaluateTransaction("GetAssetWithFullHistory", c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found or error evaluating transaction", "details": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", result)
 }

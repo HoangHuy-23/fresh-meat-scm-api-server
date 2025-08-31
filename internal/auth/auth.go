@@ -31,7 +31,7 @@ func CheckPasswordHash(password, hash string) bool {
 
 // JWT Generation
 // TODO: Move JWT_SECRET to a secure location like environment variables
-var jwtSecret = []byte("YOUR_SUPER_SECRET_KEY")
+var JwtSecret = []byte("YOUR_SUPER_SECRET_KEY")
 
 func GenerateJWT(email, role, orgShortName, fabricEnrollmentID string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
@@ -46,5 +46,5 @@ func GenerateJWT(email, role, orgShortName, fabricEnrollmentID string) (string, 
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(JwtSecret)
 }
