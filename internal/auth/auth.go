@@ -13,7 +13,7 @@ import (
 type JWTClaims struct {
 	Email              string `json:"email"`
 	Role               string `json:"role"`
-	OrgShortName       string `json:"orgShortName"`
+	FacilityID         string `json:"facilityID"`
 	FabricEnrollmentID string `json:"fabricEnrollmentID"`
 	jwt.RegisteredClaims
 }
@@ -33,12 +33,12 @@ func CheckPasswordHash(password, hash string) bool {
 // TODO: Move JWT_SECRET to a secure location like environment variables
 var JwtSecret = []byte("YOUR_SUPER_SECRET_KEY")
 
-func GenerateJWT(email, role, orgShortName, fabricEnrollmentID string) (string, error) {
+func GenerateJWT(email, role, facilityID, fabricEnrollmentID string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &JWTClaims{
 		Email:              email,
 		Role:               role,
-		OrgShortName:       orgShortName,
+		FacilityID:         facilityID,
 		FabricEnrollmentID: fabricEnrollmentID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
