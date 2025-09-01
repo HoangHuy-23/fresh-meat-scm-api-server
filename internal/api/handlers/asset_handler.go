@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"context"
 	"fresh-meat-scm-api-server/config"
 	"fresh-meat-scm-api-server/internal/blockchain"
+	"fresh-meat-scm-api-server/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -57,8 +60,50 @@ type GenericDetailsRequest struct {
 // --- Handlers ---
 
 func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
-	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
-	enrollmentID := enrollmentIDInterface.(string)
+	enrollmentID := c.GetString("user_enrollment_id")
+	userFacilityID := c.GetString("user_facility_id")
+
+	var req CreateFarmingBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	quantityJSON, _ := json.Marshal(req.Quantity)
+
+	// Truy vấn MongoDB để lấy thông tin đầy đủ của cơ sở
+	var facility models.Facility
+	facilityCollection := h.DB.Collection("facilities")
+	err := facilityCollection.FindOne(context.Background(), bson.M{"facilityID": userFacilityID}).Decode(&facility)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Facility associated with user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query facility details"})
+		return
+	}
+
+	// Unmarshal details từ request của user
+	var userDetails map[string]interface{}
+	if err := json.Unmarshal(req.Details, &userDetails); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid details JSON format"})
+		return
+	}
+
+	// Xây dựng object `FarmDetails` cuối cùng để gửi tới chaincode
+	finalFarmDetails := map[string]interface{}{
+		"facilityID":  facility.FacilityID, // Ghi lại ID của cơ sở
+		"facilityName": facility.Name,       // Ghi lại tên đầy đủ
+		"address":      facility.Address,    // Có thể thêm địa chỉ cho đầy đủ
+		// Thêm các trường từ request của user
+		"sowingDate":   userDetails["sowingDate"],
+		"harvestDate":  userDetails["harvestDate"],
+		"fertilizers":  userDetails["fertilizers"],
+		"pesticides":   userDetails["pesticides"],
+		"certificates": userDetails["certificates"],
+	}
+	finalFarmDetailsJSON, _ := json.Marshal(finalFarmDetails)
+	// ===================================
 
 	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
 	if err != nil {
@@ -74,14 +119,8 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 	}
 	contract := network.GetContract(h.Cfg.ChaincodeName)
 
-	var req CreateFarmingBatchRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	quantityJSON, _ := json.Marshal(req.Quantity)
 
-	_, err = contract.SubmitTransaction("CreateFarmingBatch", req.AssetID, req.ProductName, string(quantityJSON), string(req.Details))
+	_, err = contract.SubmitTransaction("CreateFarmingBatch", req.AssetID, req.ProductName, string(quantityJSON), string(finalFarmDetailsJSON))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return

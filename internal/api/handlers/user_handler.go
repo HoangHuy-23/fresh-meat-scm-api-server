@@ -2,17 +2,18 @@
 package handlers
 
 import (
-	"context" // <-- THÊM IMPORT
+	"context" 
 	"fmt"
 	"net/http"
 	"fresh-meat-scm-api-server/internal/auth"
 	"fresh-meat-scm-api-server/internal/ca"
+	"fresh-meat-scm-api-server/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
-	"go.mongodb.org/mongo-driver/bson" // <-- THÊM IMPORT
+	"go.mongodb.org/mongo-driver/bson" 
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -29,7 +30,7 @@ type CreateUserRequest struct {
 	Password     string `json:"password" binding:"required"`
 	Affiliation  string `json:"affiliation" binding:"required"`
 	Role         string `json:"role" binding:"required"`
-	OrgShortName string `json:"orgShortName" binding:"required"`
+	FacilityID  string `json:"facilityID" binding:"required"`
 }
 
 type LoginRequest struct {
@@ -43,7 +44,7 @@ type User struct {
 	Name               string `bson:"name"`
 	Password           string `bson:"password"`
 	Role               string `bson:"role"`
-	OrgShortName       string `bson:"orgShortName"`
+	FacilityID         string `bson:"facilityID"`
 	Status             string `bson:"status"`
 	FabricEnrollmentID string `bson:"fabricEnrollmentID"`
 }
@@ -74,7 +75,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	token, err := auth.GenerateJWT(
 		user.Email,
 		user.Role,
-		user.OrgShortName,
+		user.FacilityID,
 		user.FabricEnrollmentID,
 	)
 	if err != nil {
@@ -93,35 +94,69 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	// 1. Tạo Enrollment ID duy nhất
+	// Khai báo biến attributes để sử dụng trong cả hai trường hợp
+	var attributes []msp.Attribute
+
+	// === LOGIC ĐIỀU KIỆN DỰA TRÊN VAI TRÒ ===
+	if req.Role == "driver" {
+		// TRƯỜNG HỢP 1: NẾU LÀ TÀI XẾ
+		// - Không cần kiểm tra facilityID trong DB.
+		// - Chỉ gán các thuộc tính cần thiết.
+		attributes = []msp.Attribute{
+			{Name: "role",       Value: req.Role,       ECert: true},
+			{Name: "facilityID", Value: req.FacilityID, ECert: true}, 
+			{Name: "facilityType", Value: "CARRIER",    ECert: true},
+		}
+	} else {
+		// TRƯỜNG HỢP 2: CÁC VAI TRÒ KHÁC (worker, admin, ...)
+		// - Bắt buộc phải kiểm tra facilityID trong DB.
+		// - "Làm giàu" thuộc tính với facilityType từ DB.
+		var facility models.Facility
+		facilityCollection := h.DB.Collection("facilities")
+		err := facilityCollection.FindOne(context.Background(), bson.M{"facilityID": req.FacilityID}).Decode(&facility)
+		
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Facility with the provided ID does not exist"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking for facility"})
+			return
+		}
+
+		attributes = []msp.Attribute{
+			{Name: "role",         Value: req.Role,       ECert: true},
+			{Name: "facilityID",   Value: req.FacilityID, ECert: true},
+			{Name: "facilityType", Value: facility.Type,  ECert: true},
+		}
+	}
+	// ==========================================
+
+	// Phần còn lại của logic là chung cho tất cả các vai trò
 	enrollmentID := fmt.Sprintf("%s-%s", req.Role, uuid.New().String()[:8])
 
-	// 2. Đăng ký user với CA
-	attributes := []msp.Attribute{
-		{Name: "role", Value: req.Role, ECert: true},
-		{Name: "orgShortName", Value: req.OrgShortName, ECert: true},
-	}
+	// Đăng ký user với CA sử dụng 'attributes' đã được chuẩn bị ở trên
 	secret, err := h.CAService.RegisterUser(enrollmentID, req.Affiliation, attributes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user with CA", "details": err.Error()})
 		return
 	}
 
-	// 3. Ghi danh user để lấy cert/key
+	// Ghi danh user để lấy cert/key
 	cert, key, err := h.CAService.EnrollUser(enrollmentID, secret)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enroll user with CA", "details": err.Error()})
 		return
 	}
 
-	// 4. Lưu danh tính mới vào wallet của server
+	// Lưu danh tính mới vào wallet của server
 	identity := gateway.NewX509Identity(h.OrgName+"MSP", string(cert), string(key))
 	if err := h.Wallet.Put(enrollmentID, identity); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save new identity to wallet", "details": err.Error()})
 		return
 	}
 
-	// 5. Lưu thông tin user vào MongoDB
+	// Lưu thông tin user vào MongoDB
 	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password", "details": err.Error()})
@@ -133,11 +168,11 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		Name:               req.Name,
 		Password:           hashedPassword,
 		Role:               req.Role,
-		OrgShortName:       req.OrgShortName,
+		FacilityID:         req.FacilityID,
 		Status:             "active",
 		FabricEnrollmentID: enrollmentID,
 	}
-	if err := h.createUserInDB(&user); err != nil { // <-- SỬA LỖI: Gọi như một method
+	if err := h.createUserInDB(&user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user to database", "details": err.Error()})
 		return
 	}
@@ -146,7 +181,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		"status":       "success",
 		"message":      "User created and enrolled successfully",
 		"enrollmentID": enrollmentID,
-		"email":        req.Email,
+		"facilityID":   req.FacilityID,
 	})
 }
 
