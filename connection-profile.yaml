@@ -80,12 +80,7 @@ organizations:
       - peer0.regulator.example.com
     certificateAuthorities:
       - ca.regulator.example.com
-    users:
-      admin:
-        cert:
-          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp/signcerts/cert.pem
-        key:
-          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp/keystore/ee55319fae03da2ee01d0e391d07e07f5f13d7492137dbee3aa713d5fd71daba_sk
+    cryptoPath: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp
 
 orderers:
   orderer1.meatsupply.example.com:

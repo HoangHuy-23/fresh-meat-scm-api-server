@@ -33,7 +33,7 @@ type ItemInShipmentAPI struct {
 type CreateShipmentRequest struct {
 	ShipmentID         string             `json:"shipmentID" binding:"required"`
 	ShipmentType       string             `json:"shipmentType" binding:"required"`
-	DriverEnrollmentID string             `json:"driverEnrollmentID" binding:"required"`
+	// DriverEnrollmentID string             `json:"driverEnrollmentID" binding:"required"` // Bỏ trường này, lấy từ token
 	DriverName         string             `json:"driverName" binding:"required"`
 	VehiclePlate       string             `json:"vehiclePlate" binding:"required"`
 	Stops              []StopInJourneyAPI `json:"stops" binding:"required"`
@@ -81,7 +81,8 @@ func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 		"CreateShipment",
 		req.ShipmentID,
 		req.ShipmentType,
-		req.DriverEnrollmentID,
+		// req.DriverEnrollmentID,
+		enrollmentID,
 		req.DriverName,
 		req.VehiclePlate,
 		string(stopsJSON),

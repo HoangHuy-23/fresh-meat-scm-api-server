@@ -4,5 +4,8 @@
 # Ignore keystore directory
 /keystore
 
+# Ignore MSP directory
+/msp
+
 # Ignore environment variables file
 .env
