@@ -17,11 +17,17 @@ type FacilityHandler struct {
 	DB *mongo.Database
 }
 
+type AddressRequest struct {
+	FullText  string  `json:"fullText" binding:"required"`
+	Latitude  float64 `json:"latitude" binding:"required,min=-90,max=90"`
+	Longitude float64 `json:"longitude" binding:"required,min=-180,max=180"`
+}
+
 type CreateFacilityRequest struct {
 	FacilityID string `json:"facilityID" binding:"required"`
-	Name       string `json:"name" binding:"required"`
-	Type       string `json:"type" binding:"required"`
-	Address    string `json:"address" binding:"required"`
+	Name       string       `json:"name" binding:"required"`
+	Type       string       `json:"type" binding:"required"`
+	Address    AddressRequest `json:"address" binding:"required"`
 }
 
 // CreateFacility tạo một cơ sở mới
@@ -45,11 +51,17 @@ func (h *FacilityHandler) CreateFacility(c *gin.Context) {
 		return
 	}
 
+	fullAddress := models.Address{
+		FullText:  req.Address.FullText,
+		Latitude:  req.Address.Latitude,
+		Longitude: req.Address.Longitude,
+	}
+
 	newFacility := models.Facility{
 		FacilityID: req.FacilityID,
 		Name:       req.Name,
 		Type:       req.Type,
-		Address:    req.Address,
+		Address:    fullAddress,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
