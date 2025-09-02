@@ -85,10 +85,19 @@ func SetupRouter(
 
 			shipments := businessRoutes.Group("/shipments")
 			{
+				shipments.GET("/:id", shipmentHandler.GetShipment)
 				shipments.POST("/", shipmentHandler.CreateShipment)
 				shipments.POST("/:id/pickup", shipmentHandler.ConfirmPickup)
 				shipments.POST("/:id/start", shipmentHandler.StartShipment)
 				shipments.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
+				// Route mới cho tài xế upload ảnh
+				// Đặt trong một group riêng để áp dụng middleware Authorize chỉ cho driver
+				driverActions := shipments.Group("/:id/stops/:facilityID")
+				driverActions.Use(middleware.Authorize("driver"))
+				{
+					driverActions.POST("/pickup-photo", shipmentHandler.AddPickupPhoto)
+					driverActions.POST("/delivery-photo", shipmentHandler.AddDeliveryPhoto)
+				}
 			}
 		}
 	}

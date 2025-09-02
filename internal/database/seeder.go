@@ -16,7 +16,7 @@ type User struct {
 	Name               string `bson:"name"`
 	Password           string `bson:"password"`
 	Role               string `bson:"role"`
-	OrgShortName       string `bson:"orgShortName"`
+	FacilityID         string `bson:"facilityID"`
 	Status             string `bson:"status"`
 	FabricEnrollmentID string `bson:"fabricEnrollmentID"`
 }
@@ -48,7 +48,7 @@ func SeedSuperAdmin(db *mongo.Database, cfg config.Config) error {
 		Name:               "Super Admin",
 		Password:           hashedPassword,
 		Role:               "superadmin",
-		OrgShortName:       "system",
+		FacilityID:         "system",
 		Status:             "active",
 		FabricEnrollmentID: cfg.UserName, // "superadmin"
 	}
