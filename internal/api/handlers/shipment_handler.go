@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"fmt"
+	"time"
 	"fresh-meat-scm-api-server/config"
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/models"
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 )
 
@@ -61,6 +63,11 @@ type ConfirmPickupRequest struct {
 type ConfirmDeliveryRequest struct {
 	FacilityID     string `json:"facilityID" binding:"required"`
 	NewAssetPrefix string `json:"newAssetPrefix" binding:"required"`
+}
+
+type AddPickupPhotoRequest struct {
+	PhotoURL  string `json:"photoURL" binding:"required"`
+	PhotoHash string `json:"photoHash" binding:"required"`
 }
 
 // --- Handlers ---
@@ -159,6 +166,29 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 		return
 	}
 
+	// === LOGIC MỚI: TÌM BẰNG CHỨNG ===
+	proofCollection := h.DB.Collection("pickup_proofs")
+	var proof models.PickupProof
+	// Tìm bằng chứng mới nhất cho shipment và facility này
+	opts := options.FindOne().SetSort(bson.D{{"createdAt", -1}})
+	err = proofCollection.FindOne(context.Background(), bson.M{"shipmentID": shipmentID, "facilityID": req.FacilityID}, opts).Decode(&proof)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusPreconditionFailed, gin.H{"error": "Pickup proof photo has not been uploaded by the driver yet"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check for pickup proof"})
+		return
+	}
+
+	proofDetails := map[string]string{
+		"photoURL":  proof.PhotoURL,
+		"photoHash": proof.PhotoHash,
+		"uploadedBy": proof.UploadedBy,
+	}
+	proofJSON, _ := json.Marshal(proofDetails)
+	// =================================
+
 	actualItemsJSON, _ := json.Marshal(req.ActualItems)
 
 	_, err = contract.SubmitTransaction(
@@ -166,6 +196,7 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 		shipmentID,
 		req.FacilityID,
 		string(actualItemsJSON),
+		string(proofJSON), // Gửi bằng chứng dưới dạng JSON string
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
@@ -227,11 +258,35 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 		return
 	}
 
+	// === LOGIC MỚI: TÌM BẰNG CHỨNG GIAO HÀNG ===
+	proofCollection := h.DB.Collection("delivery_proofs") 
+	var proof models.DeliveryProof 
+	
+	opts := options.FindOne().SetSort(bson.D{{"createdAt", -1}})
+	err = proofCollection.FindOne(context.Background(), bson.M{"shipmentID": shipmentID, "facilityID": req.FacilityID}, opts).Decode(&proof)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusPreconditionFailed, gin.H{"error": "Delivery proof photo has not been uploaded by the driver yet"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check for delivery proof"})
+		return
+	}
+
+	proofDetails := map[string]string{
+		"photoURL":   proof.PhotoURL,
+		"photoHash":  proof.PhotoHash,
+		"uploadedBy": proof.UploadedBy,
+	}
+	proofJSON, _ := json.Marshal(proofDetails)
+	// ==========================================
+
 	_, err = contract.SubmitTransaction(
 		"ConfirmShipmentDelivery",
 		shipmentID,
 		req.FacilityID,
 		req.NewAssetPrefix,
+		string(proofJSON), // Gửi bằng chứng dưới dạng JSON string
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
@@ -240,7 +295,82 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Delivery confirmed for shipment " + shipmentID})
 }
 
+// Getshipment lấy các chi tiết của một lô hàng duy nhất.
+func (h *ShipmentHandler) GetShipment(c *gin.Context) {
+	shipmentID := c.Param("id")
 
+	// Queries can use the default gateway connection for simplicity.
+	// This uses the API server's identity, which is fine for read-only operations.
+	result, err := h.Fabric.Contract.EvaluateTransaction("GetShipment", shipmentID)
+	if err != nil {
+		// The error from Fabric will contain details, e.g., "asset not found"
+		c.JSON(http.StatusNotFound, gin.H{"error": "Shipment not found or error evaluating transaction", "details": err.Error()})
+		return
+	}
 
+	// The result from chaincode is already a JSON byte array, so we can return it directly.
+	c.Data(http.StatusOK, "application/json", result)
+}
 
+// AddPickupPhoto cho phép tài xế gửi bằng chứng hình ảnh trước khi pickup
+func (h *ShipmentHandler) AddPickupPhoto(c *gin.Context) {
+	shipmentID := c.Param("id")
+	facilityID := c.Param("facilityID")
+	driverEnrollmentID := c.GetString("user_enrollment_id")
 
+	var req AddPickupPhotoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	newProof := models.PickupProof{
+		ShipmentID: shipmentID,
+		FacilityID: facilityID,
+		PhotoURL:   req.PhotoURL,
+		PhotoHash:  req.PhotoHash,
+		UploadedBy: driverEnrollmentID,
+		CreatedAt:  time.Now(),
+	}
+
+	collection := h.DB.Collection("pickup_proofs")
+	// Có thể thêm logic kiểm tra xem proof đã tồn tại chưa và ghi đè (upsert)
+	_, err := collection.InsertOne(context.Background(), newProof)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save pickup proof"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Pickup photo uploaded successfully"})
+}
+
+// AddDeliveryPhoto cho phép tài xế gửi bằng chứng hình ảnh trước khi giao hàng
+func (h *ShipmentHandler) AddDeliveryPhoto(c *gin.Context) {
+	shipmentID := c.Param("id")
+	facilityID := c.Param("facilityID")
+	driverEnrollmentID := c.GetString("user_enrollment_id")
+
+	var req AddPickupPhotoRequest // Dùng lại struct này vì nó giống hệt
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	newProof := models.DeliveryProof{ 
+		ShipmentID: shipmentID,
+		FacilityID: facilityID,
+		PhotoURL:   req.PhotoURL,
+		PhotoHash:  req.PhotoHash,
+		UploadedBy: driverEnrollmentID,
+		CreatedAt:  time.Now(),
+	}
+
+	collection := h.DB.Collection("delivery_proofs") 
+	_, err := collection.InsertOne(context.Background(), newProof)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save delivery proof"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Delivery photo uploaded successfully"})
+}
