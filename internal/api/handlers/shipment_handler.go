@@ -37,7 +37,7 @@ type StopInJourneyAPI struct {
 type StopInJourneyChaincode struct {
 	FacilityID      string              `json:"facilityID"`
 	FacilityName    string              `json:"facilityName"`
-	FacilityAddress string              `json:"facilityAddress"`
+	FacilityAddress models.Address      `json:"facilityAddress"`
 	Action          string              `json:"action"`
 	Items           []ItemInShipmentAPI `json:"items"`
 }

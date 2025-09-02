@@ -94,7 +94,7 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 	finalFarmDetails := map[string]interface{}{
 		"facilityID":  facility.FacilityID, // Ghi lại ID của cơ sở
 		"facilityName": facility.Name,       // Ghi lại tên đầy đủ
-		"address":      facility.Address,    // Có thể thêm địa chỉ cho đầy đủ
+		"address":      facility.Address,    // Gửi cả object address có tọa độ
 		// Thêm các trường từ request của user
 		"sowingDate":   userDetails["sowingDate"],
 		"harvestDate":  userDetails["harvestDate"],
@@ -162,8 +162,47 @@ func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {
 }
 
 func (h *AssetHandler) ProcessAndSplitBatch(c *gin.Context) {
-	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
-	enrollmentID := enrollmentIDInterface.(string)
+	enrollmentID := c.GetString("user_enrollment_id")
+	userFacilityID := c.GetString("user_facility_id")
+
+	var req ProcessAndSplitBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	childAssetsJSON, _ := json.Marshal(req.ChildAssets)
+
+	// Truy vấn MongoDB để lấy thông tin đầy đủ của cơ sở
+	var facility models.Facility
+	facilityCollection := h.DB.Collection("facilities")
+	err := facilityCollection.FindOne(context.Background(), bson.M{"facilityID": userFacilityID}).Decode(&facility)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Facility associated with user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query facility details"})
+		return
+	}
+
+	// Unmarshal details từ request của user
+	var userDetails map[string]interface{}
+	if err := json.Unmarshal(req.Details, &userDetails); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid details JSON format"})
+		return
+	}
+
+	finalProcessingDetails := map[string]interface{}{
+		"facilityID":       facility.FacilityID,
+		"facilityName":     facility.Name,
+		"address":          facility.Address, // <-- LÀM GIÀU
+		"processorOrgName": userDetails["processorOrgName"],
+		"steps":            userDetails["steps"],
+		"certificates":     userDetails["certificates"],
+	}
+	finalDetailsJSON, _ := json.Marshal(finalProcessingDetails)
+	// ===================================
 
 	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
 	if err != nil {
@@ -179,14 +218,7 @@ func (h *AssetHandler) ProcessAndSplitBatch(c *gin.Context) {
 	}
 	contract := network.GetContract(h.Cfg.ChaincodeName)
 
-	var req ProcessAndSplitBatchRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	childAssetsJSON, _ := json.Marshal(req.ChildAssets)
-
-	_, err = contract.SubmitTransaction("ProcessAndSplitBatch", req.ParentAssetID, string(childAssetsJSON), string(req.Details))
+	_, err = contract.SubmitTransaction("ProcessAndSplitBatch", req.ParentAssetID, string(childAssetsJSON), string(finalDetailsJSON))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
@@ -195,8 +227,46 @@ func (h *AssetHandler) ProcessAndSplitBatch(c *gin.Context) {
 }
 
 func (h *AssetHandler) UpdateStorageInfo(c *gin.Context) {
-	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
-	enrollmentID := enrollmentIDInterface.(string)
+	enrollmentID := c.GetString("user_enrollment_id")
+	userFacilityID := c.GetString("user_facility_id")
+
+	assetID := c.Param("id")
+	var req GenericDetailsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Truy vấn MongoDB để lấy thông tin đầy đủ của cơ sở
+	var facility models.Facility
+	facilityCollection := h.DB.Collection("facilities")
+	err := facilityCollection.FindOne(context.Background(), bson.M{"facilityID": userFacilityID}).Decode(&facility)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Facility associated with user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query facility details"})
+		return
+	}
+
+	// Unmarshal details từ request của user
+	var userDetails map[string]interface{}
+	if err := json.Unmarshal(req.Details, &userDetails); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid details JSON format"})
+		return
+	}
+
+	finalStorageDetails := map[string]interface{}{
+	"facilityID":      facility.FacilityID,
+	"facilityName":    facility.Name,
+	"address":         facility.Address,
+	"ownerOrgName":    userDetails["ownerOrgName"],
+	"locationInStore": userDetails["locationInStore"],
+	"temperature":     userDetails["temperature"],
+	"note":            userDetails["note"],
+	}
+	finalDetailsJSON, _ := json.Marshal(finalStorageDetails)
 
 	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
 	if err != nil {
@@ -212,14 +282,7 @@ func (h *AssetHandler) UpdateStorageInfo(c *gin.Context) {
 	}
 	contract := network.GetContract(h.Cfg.ChaincodeName)
 
-	assetID := c.Param("id")
-	var req GenericDetailsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	_, err = contract.SubmitTransaction("UpdateStorageInfo", assetID, string(req.Details))
+	_, err = contract.SubmitTransaction("UpdateStorageInfo", assetID, string(finalDetailsJSON))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
@@ -228,8 +291,43 @@ func (h *AssetHandler) UpdateStorageInfo(c *gin.Context) {
 }
 
 func (h *AssetHandler) MarkAsSold(c *gin.Context) {
-	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
-	enrollmentID := enrollmentIDInterface.(string)
+	enrollmentID := c.GetString("user_enrollment_id")
+	userFacilityID := c.GetString("user_facility_id")
+
+	assetID := c.Param("id")
+	var req GenericDetailsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Truy vấn MongoDB để lấy thông tin đầy đủ của cơ sở
+	var facility models.Facility
+	facilityCollection := h.DB.Collection("facilities")
+	err := facilityCollection.FindOne(context.Background(), bson.M{"facilityID": userFacilityID}).Decode(&facility)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Facility associated with user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query facility details"})
+		return
+	}
+
+	// Unmarshal details từ request của user
+	var userDetails map[string]interface{}
+	if err := json.Unmarshal(req.Details, &userDetails); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid details JSON format"})
+		return
+	}
+
+	finalSoldDetails := map[string]interface{}{
+		"facilityID":      facility.FacilityID,
+		"facilityName":    facility.Name,
+		"address":         facility.Address, // <-- LÀM GIÀU
+		"retailerOrgName": userDetails["retailerOrgName"],
+	}
+	finalDetailsJSON, _ := json.Marshal(finalSoldDetails)
 
 	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
 	if err != nil {
@@ -245,14 +343,7 @@ func (h *AssetHandler) MarkAsSold(c *gin.Context) {
 	}
 	contract := network.GetContract(h.Cfg.ChaincodeName)
 
-	assetID := c.Param("id")
-	var req GenericDetailsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	_, err = contract.SubmitTransaction("MarkAsSold", assetID, string(req.Details))
+	_, err = contract.SubmitTransaction("MarkAsSold", assetID, string(finalDetailsJSON))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
