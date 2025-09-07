@@ -312,6 +312,21 @@ func (h *ShipmentHandler) GetShipment(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", result)
 }
 
+// GetShipmentsByDriver thực hiện một truy vấn on-chain để lấy các lô hàng của một tài xế
+func (h *ShipmentHandler) GetShipmentsByDriver(c *gin.Context) {
+	driverID := c.Param("id")
+
+	// Sử dụng EvaluateTransaction vì đây là một truy vấn chỉ đọc (query)
+	result, err := h.Fabric.Contract.EvaluateTransaction("QueryShipmentsByDriver", driverID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query shipments by driver", "details": err.Error()})
+		return
+	}
+
+	// Kết quả trả về từ chaincode đã là một mảng JSON, trả về trực tiếp
+	c.Data(http.StatusOK, "application/json", result)
+}
+
 // AddPickupPhoto cho phép tài xế gửi bằng chứng hình ảnh trước khi pickup
 func (h *ShipmentHandler) AddPickupPhoto(c *gin.Context) {
 	shipmentID := c.Param("id")

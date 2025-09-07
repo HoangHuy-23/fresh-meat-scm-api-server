@@ -392,3 +392,18 @@ func (h *AssetHandler) GetAssetTrace(c *gin.Context) {
 	}
 	c.Data(http.StatusOK, "application/json", result)
 }
+
+// GetAssetsByFacility thực hiện một truy vấn on-chain để lấy các asset của một cơ sở
+func (h *AssetHandler) GetAssetsByFacility(c *gin.Context) {
+	facilityID := c.Param("id")
+
+	// Sử dụng EvaluateTransaction vì đây là một truy vấn chỉ đọc (query)
+	result, err := h.Fabric.Contract.EvaluateTransaction("QueryAssetsByFacility", facilityID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query assets by facility", "details": err.Error()})
+		return
+	}
+
+	// Kết quả trả về từ chaincode đã là một mảng JSON, trả về trực tiếp
+	c.Data(http.StatusOK, "application/json", result)
+}
