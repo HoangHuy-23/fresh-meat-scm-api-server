@@ -71,8 +71,9 @@ func SetupRouter(
 		// Nhóm các API nghiệp vụ chính, yêu cầu các vai trò cụ thể
 		businessRoutes := apiV1.Group("/")
 		businessRoutes.Use(middleware.Authenticate())
-		businessRoutes.Use(middleware.Authorize("admin", "worker", "driver"))
+		businessRoutes.Use(middleware.Authorize("admin", "worker", "driver", "superadmin"))
 		{
+			// Asset management
 			assets := businessRoutes.Group("/assets")
 			{
 				assets.POST("/farming", assetHandler.CreateFarmingBatch)
@@ -83,6 +84,7 @@ func SetupRouter(
 				assets.POST("/split-to-units", assetHandler.SplitBatchToUnits)	
 			}
 
+			// Shipment management
 			shipments := businessRoutes.Group("/shipments")
 			{
 				shipments.GET("/:id", shipmentHandler.GetShipment)
@@ -98,6 +100,18 @@ func SetupRouter(
 					driverActions.POST("/pickup-photo", shipmentHandler.AddPickupPhoto)
 					driverActions.POST("/delivery-photo", shipmentHandler.AddDeliveryPhoto)
 				}
+			}
+
+			// Facility management (chỉ đọc)
+			facilities := businessRoutes.Group("/facilities")
+			{
+				facilities.GET("/:id/assets", assetHandler.GetAssetsByFacility)
+			}
+
+			// Drivers 
+			drivers := businessRoutes.Group("/drivers")
+			{
+				drivers.GET("/:id/shipments", shipmentHandler.GetShipmentsByDriver)
 			}
 		}
 	}
