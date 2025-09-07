@@ -106,6 +106,7 @@ func SetupRouter(
 			facilities := businessRoutes.Group("/facilities")
 			{
 				facilities.GET("/:id/assets", assetHandler.GetAssetsByFacility)
+				facilities.GET("/my/assets", assetHandler.GetAssetsByMyFacility)
 			}
 
 			// Drivers 

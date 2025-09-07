@@ -97,9 +97,10 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 		"address":      facility.Address,    // Gửi cả object address có tọa độ
 		// Thêm các trường từ request của user
 		"sowingDate":   userDetails["sowingDate"],
-		"harvestDate":  userDetails["harvestDate"],
-		"fertilizers":  userDetails["fertilizers"],
-		"pesticides":   userDetails["pesticides"],
+		"startDate":    userDetails["startDate"],
+		"expectedHarvestDate":  userDetails["expectedHarvestDate"],
+		"feed":  userDetails["feed"],
+		"medications":   userDetails["medications"],
 		"certificates": userDetails["certificates"],
 	}
 	finalFarmDetailsJSON, _ := json.Marshal(finalFarmDetails)
@@ -405,5 +406,18 @@ func (h *AssetHandler) GetAssetsByFacility(c *gin.Context) {
 	}
 
 	// Kết quả trả về từ chaincode đã là một mảng JSON, trả về trực tiếp
+	c.Data(http.StatusOK, "application/json", result)
+}
+
+// GetAssetByMyFacility cho phép một cơ sở truy xuất chi tiết một asset thuộc về cơ sở đó
+func (h *AssetHandler) GetAssetsByMyFacility(c *gin.Context) {
+	userFacilityID := c.GetString("user_facility_id")
+	
+	result, err := h.Fabric.Contract.EvaluateTransaction("QueryAssetsByFacility", userFacilityID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found or access denied", "details": err.Error()})
+		return
+	}
+
 	c.Data(http.StatusOK, "application/json", result)
 }
