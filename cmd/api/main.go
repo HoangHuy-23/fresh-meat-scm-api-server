@@ -9,6 +9,7 @@ import (
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/ca"
 	"fresh-meat-scm-api-server/internal/database"
+	"fresh-meat-scm-api-server/internal/s3"
 
 	"github.com/joho/godotenv"
 )
@@ -27,6 +28,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not load config: %v", err)
 	}
+
+	// === BƯỚC DEBUG: IN CONFIG RA ĐỂ KIỂM TRA ===
+	log.Printf("Loaded S3 Bucket: [%s]", cfg.S3.Bucket)
+	log.Printf("Loaded S3 Region: [%s]", cfg.S3.Region)
+	log.Printf("Loaded S3 Access Key ID: [%s]", cfg.S3.AccessKeyID)
+	// Để an toàn, không nên in Secret Key ra log, chỉ cần kiểm tra Access Key là đủ
+	if cfg.S3.AccessKeyID == "" {
+		log.Fatal("FATAL: S3 Access Key ID is empty. Check .env file and config loading.")
+	}
+	// ==========================================
 
 	// 2. Connect to MongoDB
 	mongoClient, err := database.ConnectDB(cfg.Mongo.URI)
@@ -57,6 +68,12 @@ func main() {
 		log.Fatalf("Failed to initialize CA service: %v", err)
 	}
 
+	// 5. Initialize S3 Uploader
+	s3Uploader, err := s3.NewUploader(cfg.S3)
+	if err != nil {
+		log.Fatalf("Failed to initialize S3 uploader: %v", err)
+	}
+
 	 // 5. (QUAN TRỌNG) Seed Super Admin user
     err = database.SeedSuperAdmin(db, cfg)
     if err != nil {
@@ -64,7 +81,7 @@ func main() {
     }
 
 	// 6. Setup router
-	router := routes.SetupRouter(fabricSetup, caService, cfg, db)
+	router := routes.SetupRouter(fabricSetup, caService, cfg, db, s3Uploader)
 
 	// 7. Start server
 	log.Printf("Starting API server on port %s", cfg.Server.Port)

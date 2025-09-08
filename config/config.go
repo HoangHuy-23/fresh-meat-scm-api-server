@@ -2,7 +2,7 @@
 package config
 
 import (
-	"strings"
+	// "strings"
 	"github.com/spf13/viper"
 )
 
@@ -62,8 +62,24 @@ func LoadConfig(path string) (config Config, err error) {
 
 	// 2. Thiết lập bộ thay thế để ánh xạ key
 	// Ví dụ: key "mongo.uri" trong YAML sẽ được ánh xạ tới biến môi trường "MONGO_URI"
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	// viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	// -------------------------------------------------
+	// 3. Thiết lập tiền tố cho biến môi trường (nếu cần)
+	// viper.SetEnvPrefix("FMSCM") // Ví dụ: FMSCM_MONGO_URI
+	// -------------------------------------------------
+	// 4. Đọc biến môi trường với tiền tố (nếu đã thiết lập)
+	// viper.AllowEmptyEnv(true) // Cho phép biến môi trường rỗng
+	// -------------------------------------------------
+	//
+	viper.BindEnv("mongo.uri", "MONGO_URI")
+	viper.BindEnv("mongo.dbName", "MONGO_DBNAME")
+	viper.BindEnv("server.port", "SERVER_PORT")
+	viper.BindEnv("jwt.secret", "JWT_SECRET")
+	viper.BindEnv("jwt.expiration", "JWT_EXPIRATION")
+	viper.BindEnv("s3.bucket", "S3_BUCKET")
+	viper.BindEnv("s3.region", "S3_REGION")
+	viper.BindEnv("s3.accessKeyID", "S3_ACCESS_KEY_ID")
+	viper.BindEnv("s3.secretAccessKey", "S3_SECRET_ACCESS_KEY")
 
 	// Đọc file config.yaml
 	// Nếu file không tồn tại, Viper sẽ chỉ sử dụng các biến môi trường.
