@@ -9,9 +9,19 @@ import (
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/ca"
 	"fresh-meat-scm-api-server/internal/database"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// === BƯỚC QUAN TRỌNG: LOAD FILE .ENV ===
+	// Phải được gọi trước khi LoadConfig
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Warning: .env file not found, reading from environment variables")
+	}
+	// =======================================
+
 	// 1. Load configuration
 	cfg, err := config.LoadConfig("./config")
 	if err != nil {
@@ -19,12 +29,12 @@ func main() {
 	}
 
 	// 2. Connect to MongoDB
-	mongoClient, err := database.ConnectDB(cfg.MongoURI)
+	mongoClient, err := database.ConnectDB(cfg.Mongo.URI)
 	if err != nil {
 		log.Fatalf("Could not connect to MongoDB: %v", err)
 	}
 	defer mongoClient.Disconnect(context.Background())
-	db := mongoClient.Database(cfg.MongoDBName)
+	db := mongoClient.Database(cfg.Mongo.DBName)
 	log.Println("MongoDB connected successfully.")
 
 	// 3. Initialize Fabric connection
@@ -40,8 +50,8 @@ func main() {
 	caService, err := ca.NewCAService(
 		fabricSetup.SDK, 
 		"ca.meatsupply.example.com",
-		cfg.OrgName,     // "MeatSupplyOrg" 
-		cfg.UserName,    // "ApiServer" (hoặc "SuperAdmin")
+		cfg.Fabric.OrgName,     // "MeatSupplyOrg" 
+		cfg.Fabric.UserName,    // "ApiServer" (hoặc "SuperAdmin")
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize CA service: %v", err)
@@ -57,8 +67,8 @@ func main() {
 	router := routes.SetupRouter(fabricSetup, caService, cfg, db)
 
 	// 7. Start server
-	log.Printf("Starting API server on port %s", cfg.ServerPort)
-	if err := router.Run(":" + cfg.ServerPort); err != nil {
+	log.Printf("Starting API server on port %s", cfg.Server.Port)
+	if err := router.Run(":" + cfg.Server.Port); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

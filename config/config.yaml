@@ -1,14 +1,20 @@
 # config/config.yaml
 server:
-  port: "8080"
+  port: ""
 
 mongo:
-  uri: "mongodb+srv://adminscm:DegAQTucutHGm0nn@admin.wubocek.mongodb.net/fresh-meat-scm?retryWrites=true&w=majority&appName=admin"
-  dbName: "fresh-meat-scm"
+  uri: ""
+  dbName: ""
 
 jwt:
-  secret: "your_jwt_secret"
-  expiration: "24h"
+  secret: ""
+  expiration: ""
+
+s3:
+  bucket: ""
+  region: ""
+  accessKeyID: ""
+  secretAccessKey: ""
 
 fabric:
   channelName: "meatchannel"

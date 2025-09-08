@@ -116,12 +116,12 @@ func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 		return
 	}
 	defer userGateway.Close()
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	// Gửi dữ liệu đã được làm giàu tới chaincode
 	stopsJSON, _ := json.Marshal(enrichedStops)
@@ -152,12 +152,12 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	shipmentID := c.Param("id")
 	var req ConfirmPickupRequest
@@ -216,12 +216,12 @@ func (h *ShipmentHandler) StartShipment(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	shipmentID := c.Param("id")
 
@@ -244,12 +244,12 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	shipmentID := c.Param("id")
 	var req ConfirmDeliveryRequest

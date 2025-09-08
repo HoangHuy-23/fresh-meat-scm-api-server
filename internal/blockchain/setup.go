@@ -28,33 +28,33 @@ func Initialize(cfg config.Config) (*FabricSetup, error) {
 		return nil, fmt.Errorf("failed to create wallet: %w", err)
 	}
 
-	err = wallet.PopulateWallet(fsWallet, cfg.OrgName, cfg.UserName, cfg.UserCertPath, cfg.UserKeyDir)
+	err = wallet.PopulateWallet(fsWallet, cfg.Fabric.OrgName, cfg.Fabric.UserName, cfg.Fabric.UserCertPath, cfg.Fabric.UserKeyDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to populate wallet for admin: %w", err)
 	}
 
-	sdk, err := fabsdk.New(fabconfig.FromFile(filepath.Clean(cfg.ConnectionProfile)))
+	sdk, err := fabsdk.New(fabconfig.FromFile(filepath.Clean(cfg.Fabric.ConnectionProfile)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create fabsdk instance: %w", err)
 	}
 
 	gw, err := gateway.Connect(
 		gateway.WithSDK(sdk),
-		gateway.WithIdentity(fsWallet, cfg.UserName),
+		gateway.WithIdentity(fsWallet, cfg.Fabric.UserName),
 	)
 	if err != nil {
 		sdk.Close()
 		return nil, fmt.Errorf("failed to connect to gateway: %w", err)
 	}
 
-	network, err := gw.GetNetwork(cfg.ChannelName)
+	network, err := gw.GetNetwork(cfg.Fabric.ChannelName)
 	if err != nil {
 		gw.Close()
 		sdk.Close()
 		return nil, fmt.Errorf("failed to get network: %w", err)
 	}
 
-	contract := network.GetContract(cfg.ChaincodeName)
+	contract := network.GetContract(cfg.Fabric.ChaincodeName)
 
 	return &FabricSetup{
 		Gateway:  gw,

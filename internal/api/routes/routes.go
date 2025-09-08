@@ -25,7 +25,7 @@ func SetupRouter(
 	// Khởi tạo các handlers
 	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup, Cfg: cfg, DB: db}
 	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup, Cfg: cfg, DB: db}
-	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.OrgName, DB: db}
+	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
 
 	apiV1 := router.Group("/api/v1")

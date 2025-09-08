@@ -113,12 +113,12 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 
 	_, err = contract.SubmitTransaction("CreateFarmingBatch", req.AssetID, req.ProductName, string(quantityJSON), string(finalFarmDetailsJSON))
@@ -140,12 +140,12 @@ func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	assetID := c.Param("id")
 	var req GenericDetailsRequest
@@ -212,12 +212,12 @@ func (h *AssetHandler) ProcessAndSplitBatch(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	_, err = contract.SubmitTransaction("ProcessAndSplitBatch", req.ParentAssetID, string(childAssetsJSON), string(finalDetailsJSON))
 	if err != nil {
@@ -276,12 +276,12 @@ func (h *AssetHandler) UpdateStorageInfo(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	_, err = contract.SubmitTransaction("UpdateStorageInfo", assetID, string(finalDetailsJSON))
 	if err != nil {
@@ -337,12 +337,12 @@ func (h *AssetHandler) MarkAsSold(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	_, err = contract.SubmitTransaction("MarkAsSold", assetID, string(finalDetailsJSON))
 	if err != nil {
@@ -363,12 +363,12 @@ func (h *AssetHandler) SplitBatchToUnits(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	var req SplitBatchToUnitsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
