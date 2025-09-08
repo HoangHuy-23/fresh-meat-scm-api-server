@@ -50,7 +50,7 @@ func SeedSuperAdmin(db *mongo.Database, cfg config.Config) error {
 		Role:               "superadmin",
 		FacilityID:         "system",
 		Status:             "active",
-		FabricEnrollmentID: cfg.UserName, // "superadmin"
+		FabricEnrollmentID: cfg.Fabric.UserName, // "superadmin"
 	}
 
 	_, err = userCollection.InsertOne(context.Background(), superAdmin)

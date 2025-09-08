@@ -7,6 +7,7 @@ import (
 	"fresh-meat-scm-api-server/internal/api/middleware"
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/ca"
+	"fresh-meat-scm-api-server/internal/s3"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -18,14 +19,15 @@ func SetupRouter(
 	caService *ca.CAService,
 	cfg config.Config,
 	db *mongo.Database,
+	s3Uploader *s3.Uploader,  // <-- THÊM S3 UPLOADER VÀO ĐÂY
 ) *gin.Engine {
 	router := gin.Default()
 	router.Use(gin.Recovery())
 
 	// Khởi tạo các handlers
 	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup, Cfg: cfg, DB: db}
-	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup, Cfg: cfg, DB: db}
-	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.OrgName, DB: db}
+	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup, Cfg: cfg, DB: db, S3Uploader: s3Uploader} // <-- TRUYỀN S3 UPLOADER VÀO ĐÂY
+	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
 
 	apiV1 := router.Group("/api/v1")
@@ -87,25 +89,61 @@ func SetupRouter(
 			// Shipment management
 			shipments := businessRoutes.Group("/shipments")
 			{
-				shipments.GET("/:id", shipmentHandler.GetShipment)
-				shipments.POST("/", shipmentHandler.CreateShipment)
-				shipments.POST("/:id/pickup", shipmentHandler.ConfirmPickup)
-				shipments.POST("/:id/start", shipmentHandler.StartShipment)
-				shipments.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
+				// Các route chung cho worker, admin, driver
+				generalShipmentRoutes := shipments.Group("/")
+				generalShipmentRoutes.Use(middleware.Authorize("admin", "worker", "driver"))
+				{
+					generalShipmentRoutes.GET("/:id", shipmentHandler.GetShipment)
+				}
+
+				// Route chỉ cho admin hoặc driver tạo shipment
+				createShipmentRoutes := shipments.Group("/")
+				createShipmentRoutes.Use(middleware.Authorize("admin", "driver"))
+				{
+					createShipmentRoutes.POST("/", shipmentHandler.CreateShipment)
+				}
+
+				// Route chỉ cho worker xác nhận
+				workerShipmentRoutes := shipments.Group("/")
+				workerShipmentRoutes.Use(middleware.Authorize("admin", "worker"))
+				{
+					workerShipmentRoutes.POST("/:id/pickup", shipmentHandler.ConfirmPickup)
+					workerShipmentRoutes.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
+				}
+				
+				// Route chỉ cho driver
+				driverShipmentRoutes := shipments.Group("/")
+				driverShipmentRoutes.Use(middleware.Authorize("admin", "driver"))
+				{
+					driverShipmentRoutes.POST("/:id/start", shipmentHandler.StartShipment)
+				}
+
+				// === PHẦN THÊM MỚI QUAN TRỌNG ===
+				// Group route cho tài xế upload ảnh tại một điểm dừng cụ thể
+				driverPhotoUploadRoutes := shipments.Group("/:id/stops/:facilityID")
+				driverPhotoUploadRoutes.Use(middleware.Authorize("driver"))
+				{
+					// Endpoint để upload ảnh minh chứng LẤY HÀNG
+					driverPhotoUploadRoutes.POST("/pickup-photo", shipmentHandler.UploadPickupPhoto)
+					// Endpoint để upload ảnh minh chứng GIAO HÀNG
+					driverPhotoUploadRoutes.POST("/delivery-photo", shipmentHandler.UploadDeliveryPhoto)
+				}
+				// =================================
 				// Route mới cho tài xế upload ảnh
 				// Đặt trong một group riêng để áp dụng middleware Authorize chỉ cho driver
-				driverActions := shipments.Group("/:id/stops/:facilityID")
-				driverActions.Use(middleware.Authorize("driver"))
-				{
-					driverActions.POST("/pickup-photo", shipmentHandler.AddPickupPhoto)
-					driverActions.POST("/delivery-photo", shipmentHandler.AddDeliveryPhoto)
-				}
+				// driverActions := shipments.Group("/:id/stops/:facilityID")
+				// driverActions.Use(middleware.Authorize("driver"))
+				// {
+				// 	driverActions.POST("/pickup-photo", shipmentHandler.AddPickupPhoto)
+				// 	driverActions.POST("/delivery-photo", shipmentHandler.AddDeliveryPhoto)
+				// }
 			}
 
 			// Facility management (chỉ đọc)
 			facilities := businessRoutes.Group("/facilities")
 			{
 				facilities.GET("/:id/assets", assetHandler.GetAssetsByFacility)
+				facilities.GET("/my/assets", assetHandler.GetAssetsByMyFacility)
 			}
 
 			// Drivers 

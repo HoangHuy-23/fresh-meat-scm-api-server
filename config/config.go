@@ -2,16 +2,27 @@
 package config
 
 import (
+	// "strings"
 	"github.com/spf13/viper"
 )
 
-// Config struct holds all configuration for the application.
-type Config struct {
-	ServerPort        string `mapstructure:"port"`
-	MongoURI          string `mapstructure:"uri"`
-	MongoDBName      string `mapstructure:"dbName"`
-	JWTSecretKey      string `mapstructure:"secret"`
-	JWTExpirationTime string `mapstructure:"expiration"`
+// --- Các struct con, phản ánh cấu trúc của YAML ---
+
+type ServerConfig struct {
+	Port string `mapstructure:"port"`
+}
+
+type MongoConfig struct {
+	URI    string `mapstructure:"uri"`
+	DBName string `mapstructure:"dbName"`
+}
+
+type JWTConfig struct {
+	Secret      string `mapstructure:"secret"`
+	Expiration  string `mapstructure:"expiration"`
+}
+
+type FabricConfig struct {
 	ChannelName       string `mapstructure:"channelName"`
 	ChaincodeName     string `mapstructure:"chaincodeName"`
 	OrgName           string `mapstructure:"orgName"`
@@ -21,66 +32,70 @@ type Config struct {
 	UserKeyDir        string `mapstructure:"userKeyDir"`
 }
 
-// LoadConfig reads configuration from file or environment variables.
+type S3Config struct {
+	Bucket          string `mapstructure:"bucket"`
+	Region          string `mapstructure:"region"`
+	AccessKeyID     string `mapstructure:"accessKeyID"`
+	SecretAccessKey string `mapstructure:"secretAccessKey"`
+}
+
+// --- Struct Config chính, bao gồm tất cả các struct con ---
+
+type Config struct {
+	Server ServerConfig `mapstructure:"server"`
+	Mongo  MongoConfig  `mapstructure:"mongo"`
+	JWT    JWTConfig    `mapstructure:"jwt"`
+	Fabric FabricConfig `mapstructure:"fabric"`
+	S3     S3Config     `mapstructure:"s3"`
+}
+
+// LoadConfig đọc cấu hình từ file và ghi đè bằng các biến môi trường.
 func LoadConfig(path string) (config Config, err error) {
+	// Thiết lập đường dẫn và tên file config
 	viper.AddConfigPath(path)
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 
+	// --- Cấu hình Viper để đọc từ biến môi trường ---
+	// 1. Bật tính năng tự động đọc biến môi trường
 	viper.AutomaticEnv()
 
+	// 2. Thiết lập bộ thay thế để ánh xạ key
+	// Ví dụ: key "mongo.uri" trong YAML sẽ được ánh xạ tới biến môi trường "MONGO_URI"
+	// viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	// -------------------------------------------------
+	// 3. Thiết lập tiền tố cho biến môi trường (nếu cần)
+	// viper.SetEnvPrefix("FMSCM") // Ví dụ: FMSCM_MONGO_URI
+	// -------------------------------------------------
+	// 4. Đọc biến môi trường với tiền tố (nếu đã thiết lập)
+	// viper.AllowEmptyEnv(true) // Cho phép biến môi trường rỗng
+	// -------------------------------------------------
+	//
+	viper.BindEnv("mongo.uri", "MONGO_URI")
+	viper.BindEnv("mongo.dbName", "MONGO_DBNAME")
+	viper.BindEnv("server.port", "SERVER_PORT")
+	viper.BindEnv("jwt.secret", "JWT_SECRET")
+	viper.BindEnv("jwt.expiration", "JWT_EXPIRATION")
+	viper.BindEnv("s3.bucket", "S3_BUCKET")
+	viper.BindEnv("s3.region", "S3_REGION")
+	viper.BindEnv("s3.accessKeyID", "S3_ACCESS_KEY_ID")
+	viper.BindEnv("s3.secretAccessKey", "S3_SECRET_ACCESS_KEY")
+
+	// Đọc file config.yaml
+	// Nếu file không tồn tại, Viper sẽ chỉ sử dụng các biến môi trường.
 	err = viper.ReadInConfig()
 	if err != nil {
-		return
+		// Chỉ trả về lỗi nếu đó không phải là lỗi "không tìm thấy file"
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return
+		}
 	}
 
-	// Unmarshal the config into the struct
-	var serverConfig struct {
-		Server Config `mapstructure:"server"`
-	}
-	err = viper.Unmarshal(&serverConfig)
+	// Unmarshal toàn bộ cấu hình đã được kết hợp (từ file và env) vào struct Config
+	err = viper.Unmarshal(&config)
 	if err != nil {
 		return
 	}
-
-	var mongoConfig struct {
-		Mongo Config `mapstructure:"mongo"`
-	}
-	err = viper.Unmarshal(&mongoConfig)
-	if err != nil {
-		return
-	}
-
-	var jwtConfig struct {
-		JWT Config `mapstructure:"jwt"`
-	}
-	err = viper.Unmarshal(&jwtConfig)
-	if err != nil {
-		return
-	}
-
-	var fabricConfig struct {
-		Fabric Config `mapstructure:"fabric"`
-	}
-	err = viper.Unmarshal(&fabricConfig)
-	if err != nil {
-		return
-	}
-
-	
-	// Combine the structs
-	config = serverConfig.Server
-	config.MongoURI = mongoConfig.Mongo.MongoURI
-	config.MongoDBName = mongoConfig.Mongo.MongoDBName
-	config.JWTSecretKey = jwtConfig.JWT.JWTSecretKey
-	config.JWTExpirationTime = jwtConfig.JWT.JWTExpirationTime
-	config.ChannelName = fabricConfig.Fabric.ChannelName
-	config.ChaincodeName = fabricConfig.Fabric.ChaincodeName
-	config.OrgName = fabricConfig.Fabric.OrgName
-	config.UserName = fabricConfig.Fabric.UserName
-	config.ConnectionProfile = fabricConfig.Fabric.ConnectionProfile
-	config.UserCertPath = fabricConfig.Fabric.UserCertPath
-	config.UserKeyDir = fabricConfig.Fabric.UserKeyDir
 
 	return
 }
