@@ -10,6 +10,7 @@ import (
 	"fresh-meat-scm-api-server/internal/ca"
 	"fresh-meat-scm-api-server/internal/database"
 	"fresh-meat-scm-api-server/internal/s3"
+	"fresh-meat-scm-api-server/internal/socket"
 
 	"github.com/joho/godotenv"
 )
@@ -80,8 +81,10 @@ func main() {
         log.Fatalf("Failed to seed super admin: %v", err)
     }
 
+	wsHub := socket.NewHub()
+
 	// 6. Setup router
-	router := routes.SetupRouter(fabricSetup, caService, cfg, db, s3Uploader)
+	router := routes.SetupRouter(fabricSetup, caService, cfg, db, s3Uploader, wsHub)
 
 	// 7. Start server
 	log.Printf("Starting API server on port %s", cfg.Server.Port)

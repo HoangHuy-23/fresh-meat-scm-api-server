@@ -8,6 +8,7 @@ import (
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/ca"
 	"fresh-meat-scm-api-server/internal/s3"
+	"fresh-meat-scm-api-server/internal/socket"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -20,18 +21,22 @@ func SetupRouter(
 	cfg config.Config,
 	db *mongo.Database,
 	s3Uploader *s3.Uploader,  // <-- THÊM S3 UPLOADER VÀO ĐÂY
+	wsHub *socket.Hub,      // <-- THÊM WEBSOCKET HUB VÀO ĐÂY
 ) *gin.Engine {
 	router := gin.Default()
 	router.Use(gin.Recovery())
 
 	// Khởi tạo các handlers
 	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup, Cfg: cfg, DB: db}
-	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup, Cfg: cfg, DB: db, S3Uploader: s3Uploader} // <-- TRUYỀN S3 UPLOADER VÀO ĐÂY
+	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup, Cfg: cfg, DB: db, S3Uploader: s3Uploader, Hub: wsHub} // <-- TRUYỀN S3 UPLOADER VÀO ĐÂY
 	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
+	webSocketHandler := &handlers.WebSocketHandler{Hub: wsHub} // <-- KHỞI TẠO WEBSOCKET HANDLER
 
 	apiV1 := router.Group("/api/v1")
 	{
+		// Route cho WebSocket
+		apiV1.GET("/ws", webSocketHandler.ServeWs) // <-- THÊM ROUTE WEBSOCKET
 		// === CÁC ROUTE KHÔNG YÊU CẦU XÁC THỰC ===
 
 		// Nhóm API authentication
