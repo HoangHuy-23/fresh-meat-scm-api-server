@@ -1,14 +1,21 @@
 # config/config.yaml
 server:
-  port: "8080"
+  port: ""
 
 mongo:
   uri: "mongodb+srv://lethanhan20039_db_user:Reiu0PtlQyrbik9K@cluster0.f3pxnpt.mongodb.net/fresh-meat-scm?retryWrites=true&w=majority&appName=Cluster0"
   dbName: "fresh-meat-scm"
 
 jwt:
-  secret: "your_jwt_secret"
-  expiration: "24h"
+  secret: ""
+  expiration: ""
+
+s3:
+  bucket: ""
+  region: ""
+  accessKeyID: ""
+  secretAccessKey: ""
+  cloudFrontDomain: ""  # Thêm trường này để lưu tên miền CloudFront
 
 fabric:
   channelName: "meatchannel"

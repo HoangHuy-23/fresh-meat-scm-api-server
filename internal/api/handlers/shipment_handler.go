@@ -7,9 +7,18 @@ import (
 	"net/http"
 	"fmt"
 	"time"
+	"crypto/sha256"
+	"encoding/hex"
+	"io/ioutil"
+	"path/filepath"
+	"bytes"
+	"log"
+	"github.com/google/uuid"
 	"fresh-meat-scm-api-server/config"
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/models"
+	"fresh-meat-scm-api-server/internal/s3"
+	"fresh-meat-scm-api-server/internal/socket"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -22,6 +31,8 @@ type ShipmentHandler struct {
 	Fabric *blockchain.FabricSetup
 	Cfg    config.Config
 	DB     *mongo.Database
+	S3Uploader     *s3.Uploader
+	Hub    *socket.Hub
 }
 
 // --- Structs cho Request Body ---
@@ -116,12 +127,12 @@ func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 		return
 	}
 	defer userGateway.Close()
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	// Gửi dữ liệu đã được làm giàu tới chaincode
 	stopsJSON, _ := json.Marshal(enrichedStops)
@@ -152,12 +163,12 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	shipmentID := c.Param("id")
 	var req ConfirmPickupRequest
@@ -202,6 +213,33 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
+	// Gửi thông báo real-time qua WebSocket
+	// === BƯỚC MỚI: LẤY THÔNG TIN TÀI XẾ CẦN THÔNG BÁO ===
+	// Chúng ta cần gọi chaincode để lấy thông tin shipment trước
+	shipmentData, err := h.Fabric.Contract.EvaluateTransaction("GetShipment", shipmentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Shipment not found", "details": err.Error()})
+		return
+	}
+	var shipmentInfo struct {
+		DriverEnrollmentID string `json:"driverEnrollmentID"`
+	}
+	if err := json.Unmarshal(shipmentData, &shipmentInfo); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse shipment data"})
+		return
+	}
+	driverToNotify := shipmentInfo.DriverEnrollmentID
+	// =================================================
+	notification := map[string]string{
+		"type":       "pickup_confirmed",
+		"shipmentID": shipmentID,
+		"driverID":   driverToNotify,
+		"message":    "Pickup has been confirmed for shipment " + shipmentID,
+	}
+	notificationJSON, _ := json.Marshal(notification)
+	if err := h.Hub.Send(driverToNotify, notificationJSON); err != nil {
+		log.Printf("Failed to send WebSocket notification: %v", err)
+	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Pickup confirmed for shipment " + shipmentID})
 }
 
@@ -216,12 +254,12 @@ func (h *ShipmentHandler) StartShipment(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	shipmentID := c.Param("id")
 
@@ -244,12 +282,12 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	}
 	defer userGateway.Close()
 
-	network, err := userGateway.GetNetwork(h.Cfg.ChannelName)
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
 		return
 	}
-	contract := network.GetContract(h.Cfg.ChaincodeName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
 	shipmentID := c.Param("id")
 	var req ConfirmDeliveryRequest
@@ -388,4 +426,132 @@ func (h *ShipmentHandler) AddDeliveryPhoto(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Delivery photo uploaded successfully"})
+}
+
+// UploadPickupPhoto nhận file ảnh từ client, upload lên S3 và lưu bằng chứng.
+func (h *ShipmentHandler) UploadPickupPhoto(c *gin.Context) {
+	shipmentID := c.Param("id")
+	facilityID := c.Param("facilityID")
+	driverEnrollmentID := c.GetString("user_enrollment_id")
+
+	// 1. Nhận file từ request multipart/form-data
+	fileHeader, err := c.FormFile("photo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Photo file is required"})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open file"})
+		return
+	}
+	defer file.Close()
+
+	// 2. Đọc toàn bộ nội dung file để tính hash
+	fileBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file content"})
+		return
+	}
+
+	// 3. Tính toán SHA-256 hash
+	hash := sha256.Sum256(fileBytes)
+	photoHash := hex.EncodeToString(hash[:])
+
+	// 4. Upload file lên S3
+	// Tạo một object key duy nhất để tránh trùng lặp
+	objectKey := fmt.Sprintf("proofs/%s-%s-%s%s", shipmentID, facilityID, uuid.New().String(), filepath.Ext(fileHeader.Filename))
+	
+	// Cần tạo lại reader từ byte slice đã đọc
+	fileReader := bytes.NewReader(fileBytes)
+	photoURL, err := h.S3Uploader.UploadFile(c.Request.Context(), fileReader, objectKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload photo", "details": err.Error()})
+		return
+	}
+
+	// 5. Lưu bằng chứng vào MongoDB
+	newProof := models.PickupProof{
+		ShipmentID: shipmentID,
+		FacilityID: facilityID,
+		PhotoURL:   photoURL,
+		PhotoHash:  photoHash,
+		UploadedBy: driverEnrollmentID,
+		CreatedAt:  time.Now(),
+	}
+
+	collection := h.DB.Collection("pickup_proofs")
+	_, err = collection.InsertOne(context.Background(), newProof)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save pickup proof"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"message":   "Pickup photo uploaded successfully",
+		"photoURL":  photoURL,
+		"photoHash": photoHash,
+	})
+}
+
+// UploadDeliveryPhoto nhận file ảnh từ client, upload lên S3 và lưu bằng chứng.
+func (h *ShipmentHandler) UploadDeliveryPhoto(c *gin.Context) {
+	shipmentID := c.Param("id")
+	facilityID := c.Param("facilityID")
+	driverEnrollmentID := c.GetString("user_enrollment_id")
+	// 1. Nhận file từ request multipart/form-data
+	fileHeader, err := c.FormFile("photo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Photo file is required"})
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open file"})
+		return
+	}
+	defer file.Close()
+
+	// 2. Đọc toàn bộ nội dung file để tính hash
+	fileBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file content"})
+		return
+	}
+	// 3. Tính toán SHA-256 hash
+	hash := sha256.Sum256(fileBytes)
+	photoHash := hex.EncodeToString(hash[:])
+	// 4. Upload file lên S3
+	// Tạo một object key duy nhất để tránh trùng lặp
+	objectKey := fmt.Sprintf("proofs/%s-%s-%s%s", shipmentID, facilityID, uuid.New().String(), filepath.Ext(fileHeader.Filename))
+	// Cần tạo lại reader từ byte slice đã đọc
+	fileReader := bytes.NewReader(fileBytes)
+	photoURL, err := h.S3Uploader.UploadFile(c.Request.Context(), fileReader, objectKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload photo", "details": err.Error()})
+		return
+	}
+	// 5. Lưu bằng chứng vào MongoDB
+	newProof := models.DeliveryProof{ 
+		ShipmentID: shipmentID,
+		FacilityID: facilityID,
+		PhotoURL:   photoURL,
+		PhotoHash:  photoHash,
+		UploadedBy: driverEnrollmentID,
+		CreatedAt:  time.Now(),
+	}
+	collection := h.DB.Collection("delivery_proofs") 
+	_, err = collection.InsertOne(context.Background(), newProof)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save delivery proof"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"message":   "Delivery photo uploaded successfully",
+		"photoURL":  photoURL,
+		"photoHash": photoHash,
+	})
 }
