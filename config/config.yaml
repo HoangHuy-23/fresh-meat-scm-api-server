@@ -15,6 +15,7 @@ s3:
   region: ""
   accessKeyID: ""
   secretAccessKey: ""
+  cloudFrontDomain: ""  # Thêm trường này để lưu tên miền CloudFront
 
 fabric:
   channelName: "meatchannel"

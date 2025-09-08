@@ -15,8 +15,9 @@ import (
 
 type Uploader struct {
 	Client *s3.Client
-	Bucket string
-	Region string
+	Bucket          string
+	Region          string
+	CloudFrontDomain string
 }
 
 func NewUploader(cfg config.S3Config) (*Uploader, error) {
@@ -32,8 +33,9 @@ func NewUploader(cfg config.S3Config) (*Uploader, error) {
 
 	return &Uploader{
 		Client: s3Client,
-		Bucket: cfg.Bucket,
-		Region: cfg.Region,
+		Bucket:          cfg.Bucket,
+		Region:          cfg.Region,
+		CloudFrontDomain: cfg.CloudFrontDomain,
 	}, nil
 }
 
@@ -43,13 +45,19 @@ func (u *Uploader) UploadFile(ctx context.Context, file io.Reader, objectKey str
 		Bucket: aws.String(u.Bucket),
 		Key:    aws.String(objectKey),
 		Body:   file,
-		// ACL:    "public-read", // Để file có thể truy cập công khai qua URL
+		ContentType: aws.String("image/jpeg"), // Giả sử tất cả ảnh đều là JPEG\\\
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file to S3: %w", err)
 	}
 
-	// Xây dựng URL thủ công
+	if u.CloudFrontDomain != "" {
+		// Nếu có, xây dựng URL CloudFront
+		url := fmt.Sprintf("https://%s/%s", u.CloudFrontDomain, objectKey)
+		return url, nil
+	}
+
+	// Nếu không, quay trở lại xây dựng URL S3 (fallback)
 	url := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", u.Bucket, u.Region, objectKey)
 	return url, nil
 }

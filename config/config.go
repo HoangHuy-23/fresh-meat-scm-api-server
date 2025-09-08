@@ -37,6 +37,7 @@ type S3Config struct {
 	Region          string `mapstructure:"region"`
 	AccessKeyID     string `mapstructure:"accessKeyID"`
 	SecretAccessKey string `mapstructure:"secretAccessKey"`
+	CloudFrontDomain string `mapstructure:"cloudFrontDomain"`
 }
 
 // --- Struct Config chính, bao gồm tất cả các struct con ---
@@ -80,6 +81,8 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.BindEnv("s3.region", "S3_REGION")
 	viper.BindEnv("s3.accessKeyID", "S3_ACCESS_KEY_ID")
 	viper.BindEnv("s3.secretAccessKey", "S3_SECRET_ACCESS_KEY")
+	viper.BindEnv("s3.cloudFrontDomain", "S3_CLOUDFRONT_DOMAIN")
+	// -------------------------------------------------
 
 	// Đọc file config.yaml
 	// Nếu file không tồn tại, Viper sẽ chỉ sử dụng các biến môi trường.
