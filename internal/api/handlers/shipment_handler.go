@@ -12,11 +12,13 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"bytes"
+	"log"
 	"github.com/google/uuid"
 	"fresh-meat-scm-api-server/config"
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/models"
 	"fresh-meat-scm-api-server/internal/s3"
+	"fresh-meat-scm-api-server/internal/socket"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -30,6 +32,7 @@ type ShipmentHandler struct {
 	Cfg    config.Config
 	DB     *mongo.Database
 	S3Uploader     *s3.Uploader
+	Hub    *socket.Hub
 }
 
 // --- Structs cho Request Body ---
@@ -209,6 +212,33 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
+	}
+	// Gửi thông báo real-time qua WebSocket
+	// === BƯỚC MỚI: LẤY THÔNG TIN TÀI XẾ CẦN THÔNG BÁO ===
+	// Chúng ta cần gọi chaincode để lấy thông tin shipment trước
+	shipmentData, err := h.Fabric.Contract.EvaluateTransaction("GetShipment", shipmentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Shipment not found", "details": err.Error()})
+		return
+	}
+	var shipmentInfo struct {
+		DriverEnrollmentID string `json:"driverEnrollmentID"`
+	}
+	if err := json.Unmarshal(shipmentData, &shipmentInfo); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse shipment data"})
+		return
+	}
+	driverToNotify := shipmentInfo.DriverEnrollmentID
+	// =================================================
+	notification := map[string]string{
+		"type":       "pickup_confirmed",
+		"shipmentID": shipmentID,
+		"driverID":   driverToNotify,
+		"message":    "Pickup has been confirmed for shipment " + shipmentID,
+	}
+	notificationJSON, _ := json.Marshal(notification)
+	if err := h.Hub.Send(driverToNotify, notificationJSON); err != nil {
+		log.Printf("Failed to send WebSocket notification: %v", err)
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Pickup confirmed for shipment " + shipmentID})
 }
