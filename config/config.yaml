@@ -3,7 +3,7 @@ server:
   port: "8080"
 
 mongo:
-  uri: "mongodb+srv://adminscm:DegAQTucutHGm0nn@admin.wubocek.mongodb.net/fresh-meat-scm?retryWrites=true&w=majority&appName=admin"
+  uri: "mongodb+srv://lethanhan20039_db_user:Reiu0PtlQyrbik9K@cluster0.f3pxnpt.mongodb.net/fresh-meat-scm?retryWrites=true&w=majority&appName=Cluster0"
   dbName: "fresh-meat-scm"
 
 jwt:
@@ -12,9 +12,9 @@ jwt:
 
 fabric:
   channelName: "meatchannel"
-  chaincodeName: "meatcc" 
+  chaincodeName: "meatcc"
   orgName: "MeatSupplyOrg"
   userName: "superadmin"
   connectionProfile: "./connection-profile.yaml"
-  userCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem"
-  userKeyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/"
+  userCertPath: "/home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem"
+  userKeyDir: "/home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/"
