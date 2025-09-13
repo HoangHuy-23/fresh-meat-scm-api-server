@@ -72,7 +72,7 @@ organizations:
         cert:
           path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem
         key:
-          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/dde8b44f79780dbc86b7bfa2784659b5604831fc13987b05f4573e7eb32b29fd_sk
+          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/b8151ded781abc693a71f42c45f26cdf2aa9f97894488d17e2c63bf10aa6dca2_sk
   # Thêm định nghĩa cho RegulatorOrg để SDK biết về nó
   RegulatorOrg:
     mspid: RegulatorOrgMSP
@@ -140,7 +140,7 @@ certificateAuthorities:
     url: https://localhost:8054
     caName: ca.regulator.example.com
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/regulator/ca-cert.pem
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/regulator/ca-cert.pem
     httpOptions:
       verify: false
     registrar:
