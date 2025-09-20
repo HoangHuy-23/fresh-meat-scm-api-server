@@ -38,15 +38,14 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// User struct matches the document in MongoDB
-type User struct {
-	Email              string `bson:"email"`
-	Name               string `bson:"name"`
-	Password           string `bson:"password"`
-	Role               string `bson:"role"`
-	FacilityID         string `bson:"facilityID"`
-	Status             string `bson:"status"`
-	FabricEnrollmentID string `bson:"fabricEnrollmentID"`
+// ProfileResponse là struct an toàn để trả về thông tin user, không bao gồm password.
+type ProfileResponse struct {
+	Email              string `json:"email"`
+	Name               string `json:"name"`
+	Role               string `json:"role"`
+	FacilityID         string `json:"facilityID"`
+	Status             string `json:"status"`
+	FabricEnrollmentID string `json:"fabricEnrollmentID"`
 }
 
 // Login handles user authentication.
@@ -163,7 +162,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	user := User{
+	user := models.User{
 		Email:              req.Email,
 		Name:               req.Name,
 		Password:           hashedPassword,
@@ -185,11 +184,50 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	})
 }
 
+// GetProfile lấy thông tin của người dùng đang đăng nhập.
+func (h *UserHandler) GetProfile(c *gin.Context) {
+	// 1. Lấy enrollmentID từ context, đã được middleware xác thực và đưa vào.
+	enrollmentID, exists := c.Get("user_enrollment_id")
+	if !exists {
+		// Lỗi này không nên xảy ra nếu middleware hoạt động đúng.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User enrollment ID not found in context"})
+		return
+	}
+
+	// 2. Tìm user trong database bằng enrollmentID.
+	var user models.User
+	collection := h.DB.Collection("users")
+	err := collection.FindOne(context.Background(), bson.M{"fabricEnrollmentID": enrollmentID}).Decode(&user)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Trường hợp hiếm: user có token hợp lệ nhưng đã bị xóa khỏi DB.
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query user profile"})
+		return
+	}
+
+	// 3. Xây dựng và trả về response an toàn.
+	// TUYỆT ĐỐI KHÔNG TRẢ VỀ `user` struct trực tiếp vì nó chứa password hash.
+	response := ProfileResponse{
+		Email:              user.Email,
+		Name:               user.Name,
+		Role:               user.Role,
+		FacilityID:         user.FacilityID,
+		Status:             user.Status,
+		FabricEnrollmentID: user.FabricEnrollmentID,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // --- Helper Methods ---
 
 // findUserByEmail is a helper method to find a user in the database.
-func (h *UserHandler) findUserByEmail(email string) (*User, error) {
-	var user User
+func (h *UserHandler) findUserByEmail(email string) (*models.User, error) {
+	var user models.User
 	collection := h.DB.Collection("users")
 	err := collection.FindOne(context.TODO(), bson.M{"email": email}).Decode(&user)
 	if err != nil {
@@ -199,7 +237,7 @@ func (h *UserHandler) findUserByEmail(email string) (*User, error) {
 }
 
 // createUserInDB is a helper method to insert a new user into the database.
-func (h *UserHandler) createUserInDB(user *User) error {
+func (h *UserHandler) createUserInDB(user *models.User) error {
 	collection := h.DB.Collection("users")
 	_, err := collection.InsertOne(context.TODO(), user)
 	return err

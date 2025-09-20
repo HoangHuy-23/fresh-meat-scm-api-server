@@ -32,6 +32,8 @@ func SetupRouter(
 	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
 	webSocketHandler := &handlers.WebSocketHandler{Hub: wsHub} // <-- KHỞI TẠO WEBSOCKET HANDLER
+	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub, Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO DISPATCH HANDLER
+	vehicleHandler := &handlers.VehicleHandler{DB: db} // <-- KHỞI TẠO VEHICLE HANDLER
 
 	apiV1 := router.Group("/api/v1")
 	{
@@ -73,6 +75,13 @@ func SetupRouter(
 				facilities.PUT("/:id", facilityHandler.UpdateFacility)
 				facilities.DELETE("/:id", facilityHandler.DeleteFacility)
 			}
+
+			// Vehicle management (CRUD)
+			vehicles := admin.Group("/vehicles")
+			{
+				vehicles.POST("/", vehicleHandler.CreateVehicle)
+				// Chúng ta có thể thêm các route GET, PUT, DELETE tương tự nếu cần
+			}
 		}
 
 		// Nhóm các API nghiệp vụ chính, yêu cầu các vai trò cụ thể
@@ -80,6 +89,15 @@ func SetupRouter(
 		businessRoutes.Use(middleware.Authenticate())
 		businessRoutes.Use(middleware.Authorize("admin", "worker", "driver", "superadmin"))
 		{
+
+			// === THÊM GROUP VÀ ROUTE MỚI TẠI ĐÂY ===
+			profile := businessRoutes.Group("/profile")
+			{
+				// Endpoint cho người dùng lấy thông tin của chính họ
+				profile.GET("/me", userHandler.GetProfile)
+			}
+			// =======================================
+
 			// Asset management
 			assets := businessRoutes.Group("/assets")
 			{
@@ -133,15 +151,6 @@ func SetupRouter(
 					// Endpoint để upload ảnh minh chứng GIAO HÀNG
 					driverPhotoUploadRoutes.POST("/delivery-photo", shipmentHandler.UploadDeliveryPhoto)
 				}
-				// =================================
-				// Route mới cho tài xế upload ảnh
-				// Đặt trong một group riêng để áp dụng middleware Authorize chỉ cho driver
-				// driverActions := shipments.Group("/:id/stops/:facilityID")
-				// driverActions.Use(middleware.Authorize("driver"))
-				// {
-				// 	driverActions.POST("/pickup-photo", shipmentHandler.AddPickupPhoto)
-				// 	driverActions.POST("/delivery-photo", shipmentHandler.AddDeliveryPhoto)
-				// }
 			}
 
 			// Facility management (chỉ đọc)
@@ -155,7 +164,60 @@ func SetupRouter(
 			drivers := businessRoutes.Group("/drivers")
 			{
 				drivers.GET("/:id/shipments", shipmentHandler.GetShipmentsByDriver)
+				// Lấy danh sách xe của một tài xế
+				drivers.GET("/:id/vehicles", vehicleHandler.GetVehiclesByDriver)
 			}
+
+			// Group mới cho processors
+			processors := businessRoutes.Group("/processors")
+			processors.Use(middleware.Authorize("admin", "worker"))
+			{
+				// :id ở đây là facilityID của nhà máy chế biến
+				processors.GET("/:id/assets/unprocessed", assetHandler.GetUnprocessedAssetsByProcessor)
+				processors.GET("/:id/assets/processed", assetHandler.GetProcessedAssetsByProcessor)
+			}
+
+			dispatchRequests := businessRoutes.Group("/dispatch-requests")
+			{
+				// Route cho worker/admin tạo yêu cầu
+				createRoute := dispatchRequests.Group("/")
+				createRoute.Use(middleware.Authorize("admin", "worker"))
+				{
+					createRoute.POST("/", dispatchHandler.CreateDispatchRequest)
+				}
+
+				// === THÊM ROUTE MỚI CHO ADMIN XEM ===
+				// Route chỉ cho admin/superadmin xem danh sách
+				adminRoute := dispatchRequests.Group("/")
+				adminRoute.Use(middleware.Authorize("admin", "superadmin"))
+				{
+					adminRoute.GET("/", dispatchHandler.GetAllDispatchRequests)
+				}
+				// =====================================
+			}
+
+			// === THÊM GROUP MỚI CHO TRANSPORT BIDS ===
+			transportBids := businessRoutes.Group("/transport-bids")
+			{
+				// Route cho Admin tạo gói thầu
+				adminRoute := transportBids.Group("/")
+				adminRoute.Use(middleware.Authorize("admin", "superadmin"))
+				{
+					adminRoute.POST("/", dispatchHandler.CreateTransportBid)
+				}
+
+				// === THÊM ROUTE MỚI CHO DRIVER ===
+				driverRoute := transportBids.Group("/")
+				driverRoute.Use(middleware.Authorize("driver"))
+				{
+					// Lấy danh sách các gói thầu của tôi
+					driverRoute.GET("/mine", dispatchHandler.GetMyBids)
+					// Chúng ta sẽ thêm route POST /:id/confirm vào đây
+					driverRoute.POST("/:id/confirm", dispatchHandler.ConfirmBid)
+				}
+				// =================================
+			}
+			// =======================================
 		}
 	}
 

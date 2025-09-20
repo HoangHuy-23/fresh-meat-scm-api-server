@@ -23,22 +23,22 @@ type AssetHandler struct {
 
 // --- Structs cho Request Body ---
 
-type Quantity struct {
-	Unit  string  `json:"unit" binding:"required"`
-	Value float64 `json:"value" binding:"required"`
-}
+// type Quantity struct {
+// 	Unit  string  `json:"unit" binding:"required"`
+// 	Value float64 `json:"value" binding:"required"`
+// }
 
 type CreateFarmingBatchRequest struct {
 	AssetID     string          `json:"assetID" binding:"required"`
 	ProductName string          `json:"productName" binding:"required"`
-	Quantity    Quantity        `json:"quantity" binding:"required"`
+	Quantity    models.Quantity `json:"quantity" binding:"required"`
 	Details     json.RawMessage `json:"details" binding:"required"`
 }
 
 type ChildAssetInputAPI struct {
-	AssetID     string   `json:"assetID" binding:"required"`
-	ProductName string   `json:"productName" binding:"required"`
-	Quantity    Quantity `json:"quantity" binding:"required"`
+	AssetID     string          `json:"assetID" binding:"required"`
+	ProductName string          `json:"productName" binding:"required"`
+	Quantity    models.Quantity `json:"quantity" binding:"required"`
 }
 
 type ProcessAndSplitBatchRequest struct {
@@ -416,6 +416,54 @@ func (h *AssetHandler) GetAssetsByMyFacility(c *gin.Context) {
 	result, err := h.Fabric.Contract.EvaluateTransaction("QueryAssetsByFacility", userFacilityID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found or access denied", "details": err.Error()})
+		return
+	}
+
+	c.Data(http.StatusOK, "application/json", result)
+}
+
+// GetUnprocessedAssetsByProcessor lấy các lô sản phẩm chưa chế biến tại một nhà máy.
+func (h *AssetHandler) GetUnprocessedAssetsByProcessor(c *gin.Context) {
+	facilityID := c.Param("id")
+	enrollmentID := c.GetString("user_enrollment_id")
+
+	// Cần sử dụng gateway của người dùng để chaincode có thể xác thực quyền
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+	network, _ := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+
+	result, err := contract.EvaluateTransaction("QueryAssetsAtProcessorByStatus", facilityID, "AT_PROCESSOR")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query unprocessed assets", "details": err.Error()})
+		return
+	}
+
+	c.Data(http.StatusOK, "application/json", result)
+}
+
+// GetProcessedAssetsByProcessor lấy các lô sản phẩm đã chế biến tại một nhà máy.
+func (h *AssetHandler) GetProcessedAssetsByProcessor(c *gin.Context) {
+	facilityID := c.Param("id")
+	enrollmentID := c.GetString("user_enrollment_id")
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+	network, _ := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+
+	// Trạng thái sau khi chế biến là "PACKAGED"
+	result, err := contract.EvaluateTransaction("QueryAssetsAtProcessorByStatus", facilityID, "PACKAGED")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query processed assets", "details": err.Error()})
 		return
 	}
 

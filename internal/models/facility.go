@@ -6,11 +6,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type Address struct {
-	FullText  string  `bson:"fullText" json:"fullText"`   // Chuỗi địa chỉ đầy đủ do người dùng nhập
-	Latitude  float64 `bson:"latitude" json:"latitude"`   // Vĩ độ
-	Longitude float64 `bson:"longitude" json:"longitude"` // Kinh độ
-}
+// type Address struct {
+// 	FullText  string  `bson:"fullText" json:"fullText"`   // Chuỗi địa chỉ đầy đủ do người dùng nhập
+// 	Latitude  float64 `bson:"latitude" json:"latitude"`   // Vĩ độ
+// 	Longitude float64 `bson:"longitude" json:"longitude"` // Kinh độ
+// }
 
 type Facility struct {
 	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id"`
