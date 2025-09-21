@@ -38,8 +38,8 @@ type ShipmentHandler struct {
 // StopInJourneyAPI là struct mà client gửi lên, rất đơn giản.
 type StopInJourneyAPI struct {
 	FacilityID string              `json:"facilityID" binding:"required"`
-	Action     string              `json:"action" binding:"required"`
-	Items      []ItemInShipmentAPI `json:"items" binding:"required"`
+	Action     string               `json:"action" binding:"required"`
+	Items      []models.ItemInShipmentAPI `json:"items" binding:"required"`
 }
 
 // StopInJourneyChaincode là struct được "làm giàu" để gửi tới chaincode.
@@ -48,13 +48,13 @@ type StopInJourneyChaincode struct {
 	FacilityName    string              `json:"facilityName"`
 	FacilityAddress models.Address      `json:"facilityAddress"`
 	Action          string              `json:"action"`
-	Items           []ItemInShipmentAPI `json:"items"`
+	Items           []models.ItemInShipmentAPI `json:"items"`
 }
 
-type ItemInShipmentAPI struct {
-	AssetID  string   `json:"assetID" binding:"required"`
-	Quantity Quantity `json:"quantity" binding:"required"`
-}
+// type ItemInShipmentAPI struct {
+// 	AssetID  string   `json:"assetID" binding:"required"`
+// 	Quantity Quantity `json:"quantity" binding:"required"`
+// }
 
 type CreateShipmentRequest struct {
 	ShipmentID         string             `json:"shipmentID" binding:"required"`
@@ -66,7 +66,7 @@ type CreateShipmentRequest struct {
 
 type ConfirmPickupRequest struct {
 	FacilityID  string              `json:"facilityID" binding:"required"`
-	ActualItems []ItemInShipmentAPI `json:"actualItems" binding:"required"`
+	ActualItems []models.ItemInShipmentAPI `json:"actualItems" binding:"required"`
 }
 
 type ConfirmDeliveryRequest struct {
