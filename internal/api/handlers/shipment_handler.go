@@ -498,3 +498,18 @@ func (h *ShipmentHandler) UploadDeliveryPhoto(c *gin.Context) {
 		"photoHash": photoHash,
 	})
 }
+
+// GetShipmentsByFacility thực hiện một truy vấn on-chain để lấy các lô hàng liên quan đến một cơ sở.
+func (h *ShipmentHandler) GetShipmentsByFacility(c *gin.Context) {
+	facilityID := c.Param("id")
+
+	// Sử dụng EvaluateTransaction vì đây là một truy vấn chỉ đọc.
+	// Có thể dùng identity của server hoặc của user đều được.
+	result, err := h.Fabric.Contract.EvaluateTransaction("QueryShipmentsByFacility", facilityID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query shipments by facility", "details": err.Error()})
+		return
+	}
+
+	c.Data(http.StatusOK, "application/json", result)
+}
