@@ -184,6 +184,7 @@ func SetupRouter(
 				createRoute.Use(middleware.Authorize("admin", "worker"))
 				{
 					createRoute.POST("/", dispatchHandler.CreateDispatchRequest)
+					createRoute.GET("/:id", dispatchHandler.GetDispatchRequestByID)
 				}
 
 				// === THÊM ROUTE MỚI CHO ADMIN XEM ===
@@ -194,6 +195,13 @@ func SetupRouter(
 					adminRoute.GET("/", dispatchHandler.GetAllDispatchRequests)
 				}
 				// =====================================
+
+				// Route cho facility xem các yêu cầu của họ
+				facilityRoute := dispatchRequests.Group("/my")
+				facilityRoute.Use(middleware.Authorize("admin", "worker", "driver"))
+				{
+					facilityRoute.GET("/", dispatchHandler.GetMyFacilityDispatchRequests)
+				}
 			}
 
 			// === THÊM GROUP MỚI CHO TRANSPORT BIDS ===

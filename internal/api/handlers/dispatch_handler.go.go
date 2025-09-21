@@ -7,6 +7,7 @@ import (
 	"time"
 	"log"
 	"encoding/json"
+	"strings"
 	"fresh-meat-scm-api-server/internal/models"
 	"fresh-meat-scm-api-server/internal/socket"
 	"fresh-meat-scm-api-server/internal/blockchain"
@@ -59,7 +60,7 @@ func (h *DispatchHandler) CreateDispatchRequest(c *gin.Context) {
 	}
 
 	newRequest := models.DispatchRequest{
-		RequestID:      fmt.Sprintf("DREQ-%s", uuid.New().String()[:8]),
+		RequestID:      fmt.Sprintf("DR-%s", strings.ToUpper(uuid.New().String()[:8])),
 		FromFacilityID: creatorFacilityID, // Tự động lấy từ token của người tạo
 		Items:          payload.Items,
 		Status:         "PENDING",
@@ -117,6 +118,47 @@ func (h *DispatchHandler) GetAllDispatchRequests(c *gin.Context) {
 
 	// 5. Trả về kết quả
 	c.JSON(http.StatusOK, requests)
+}
+
+// GetMyFacilityDispatchRequests lấy danh sách các yêu cầu xuất hàng của facility hiện tại.
+func (h *DispatchHandler) GetMyFacilityDispatchRequests(c *gin.Context) {
+	facilityID := c.GetString("user_facility_id")
+	filter := bson.M{"fromFacilityID": facilityID}
+
+	collection := h.DB.Collection("dispatch_requests")
+	cursor, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query dispatch requests"})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var requests []models.DispatchRequest
+	if err = cursor.All(context.Background(), &requests); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode dispatch requests"})
+		return
+	}
+	if requests == nil {
+		requests = []models.DispatchRequest{}
+	}
+	c.JSON(http.StatusOK, requests)
+}
+
+// GetDispatchRequestByID lấy chi tiết một yêu cầu xuất hàng theo ID.
+func (h *DispatchHandler) GetDispatchRequestByID(c *gin.Context) {
+	requestID := c.Param("id")
+	collection := h.DB.Collection("dispatch_requests")
+	var request models.DispatchRequest
+	err := collection.FindOne(context.Background(), bson.M{"requestID": requestID}).Decode(&request)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Dispatch request not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve dispatch request"})
+		return
+	}
+	c.JSON(http.StatusOK, request)
 }
 
 // CreateTransportBid xử lý việc Admin gom nhóm và tạo gói mời thầu (VỚI TRANSACTION).
@@ -183,7 +225,7 @@ func (h *DispatchHandler) CreateTransportBid(c *gin.Context) {
 
 		// 2. Tạo TransportBid mới
 		newBid := models.TransportBid{
-			BidID:              fmt.Sprintf("BID-%s", uuid.New().String()[:8]),
+			BidID:              fmt.Sprintf("BID-%s", strings.ToUpper(uuid.New().String()[:8])),
 			OriginalRequestIDs: payload.OriginalRequestIDs,
 			ShipmentType:       payload.ShipmentType,
 			BiddingAssignments: payload.BiddingAssignments,
