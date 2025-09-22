@@ -513,3 +513,31 @@ func (h *ShipmentHandler) GetShipmentsByFacility(c *gin.Context) {
 
 	c.Data(http.StatusOK, "application/json", result)
 }
+
+// CompleteShipment cho phép tài xế đánh dấu lô hàng là hoàn thành.
+// Chỉ dùng để test, không dùng trong thực tế.
+func (h *ShipmentHandler) CompleteShipment(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+
+	shipmentID := c.Param("id")
+	_, err = contract.SubmitTransaction("CompleteShipment", shipmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Shipment " + shipmentID + " has been completed."})
+}

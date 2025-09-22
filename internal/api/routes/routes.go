@@ -151,6 +151,13 @@ func SetupRouter(
 					// Endpoint để upload ảnh minh chứng GIAO HÀNG
 					driverPhotoUploadRoutes.POST("/delivery-photo", shipmentHandler.UploadDeliveryPhoto)
 				}
+
+				// ===== dành cho admin test =====
+				adminTestRoutes := shipments.Group("/test")
+				adminTestRoutes.Use(middleware.Authorize("superadmin"))
+				{
+					adminTestRoutes.POST("/:id/complete", shipmentHandler.CompleteShipment)
+				}
 			}
 
 			// Facility management (chỉ đọc)
