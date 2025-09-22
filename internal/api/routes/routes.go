@@ -151,6 +151,13 @@ func SetupRouter(
 					// Endpoint để upload ảnh minh chứng GIAO HÀNG
 					driverPhotoUploadRoutes.POST("/delivery-photo", shipmentHandler.UploadDeliveryPhoto)
 				}
+
+				// ===== dành cho admin test =====
+				adminTestRoutes := shipments.Group("/test")
+				adminTestRoutes.Use(middleware.Authorize("superadmin"))
+				{
+					adminTestRoutes.POST("/:id/complete", shipmentHandler.CompleteShipment)
+				}
 			}
 
 			// Facility management (chỉ đọc)
@@ -158,6 +165,7 @@ func SetupRouter(
 			{
 				facilities.GET("/:id/assets", assetHandler.GetAssetsByFacility)
 				facilities.GET("/my/assets", assetHandler.GetAssetsByMyFacility)
+				facilities.GET("/:id/shipments", shipmentHandler.GetShipmentsByFacility)
 			}
 
 			// Drivers 
@@ -184,6 +192,7 @@ func SetupRouter(
 				createRoute.Use(middleware.Authorize("admin", "worker"))
 				{
 					createRoute.POST("/", dispatchHandler.CreateDispatchRequest)
+					createRoute.GET("/:id", dispatchHandler.GetDispatchRequestByID)
 				}
 
 				// === THÊM ROUTE MỚI CHO ADMIN XEM ===
@@ -194,6 +203,13 @@ func SetupRouter(
 					adminRoute.GET("/", dispatchHandler.GetAllDispatchRequests)
 				}
 				// =====================================
+
+				// Route cho facility xem các yêu cầu của họ
+				facilityRoute := dispatchRequests.Group("/my")
+				facilityRoute.Use(middleware.Authorize("admin", "worker", "driver"))
+				{
+					facilityRoute.GET("/", dispatchHandler.GetMyFacilityDispatchRequests)
+				}
 			}
 
 			// === THÊM GROUP MỚI CHO TRANSPORT BIDS ===

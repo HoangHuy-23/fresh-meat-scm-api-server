@@ -343,69 +343,6 @@ func (h *ShipmentHandler) GetShipmentsByDriver(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", result)
 }
 
-// AddPickupPhoto cho phép tài xế gửi bằng chứng hình ảnh trước khi pickup
-// func (h *ShipmentHandler) AddPickupPhoto(c *gin.Context) {
-// 	shipmentID := c.Param("id")
-// 	facilityID := c.Param("facilityID")
-// 	driverEnrollmentID := c.GetString("user_enrollment_id")
-
-// 	var req AddPickupPhotoRequest
-// 	if err := c.ShouldBindJSON(&req); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 		return
-// 	}
-
-// 	newProof := models.PickupProof{
-// 		ShipmentID: shipmentID,
-// 		FacilityID: facilityID,
-// 		PhotoURL:   req.PhotoURL,
-// 		PhotoHash:  req.PhotoHash,
-// 		UploadedBy: driverEnrollmentID,
-// 		CreatedAt:  time.Now(),
-// 	}
-
-// 	collection := h.DB.Collection("pickup_proofs")
-// 	// Có thể thêm logic kiểm tra xem proof đã tồn tại chưa và ghi đè (upsert)
-// 	_, err := collection.InsertOne(context.Background(), newProof)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save pickup proof"})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Pickup photo uploaded successfully"})
-// }
-
-// AddDeliveryPhoto cho phép tài xế gửi bằng chứng hình ảnh trước khi giao hàng
-// func (h *ShipmentHandler) AddDeliveryPhoto(c *gin.Context) {
-// 	shipmentID := c.Param("id")
-// 	facilityID := c.Param("facilityID")
-// 	driverEnrollmentID := c.GetString("user_enrollment_id")
-
-// 	var req AddPickupPhotoRequest // Dùng lại struct này vì nó giống hệt
-// 	if err := c.ShouldBindJSON(&req); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 		return
-// 	}
-
-// 	newProof := models.DeliveryProof{ 
-// 		ShipmentID: shipmentID,
-// 		FacilityID: facilityID,
-// 		PhotoURL:   req.PhotoURL,
-// 		PhotoHash:  req.PhotoHash,
-// 		UploadedBy: driverEnrollmentID,
-// 		CreatedAt:  time.Now(),
-// 	}
-
-// 	collection := h.DB.Collection("delivery_proofs") 
-// 	_, err := collection.InsertOne(context.Background(), newProof)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save delivery proof"})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Delivery photo uploaded successfully"})
-// }
-
 // UploadPickupPhoto nhận file ảnh từ client, upload lên S3 và lưu bằng chứng.
 func (h *ShipmentHandler) UploadPickupPhoto(c *gin.Context) {
 	shipmentID := c.Param("id")
@@ -560,4 +497,47 @@ func (h *ShipmentHandler) UploadDeliveryPhoto(c *gin.Context) {
 		"photoURL":  photoURL,
 		"photoHash": photoHash,
 	})
+}
+
+// GetShipmentsByFacility thực hiện một truy vấn on-chain để lấy các lô hàng liên quan đến một cơ sở.
+func (h *ShipmentHandler) GetShipmentsByFacility(c *gin.Context) {
+	facilityID := c.Param("id")
+
+	// Sử dụng EvaluateTransaction vì đây là một truy vấn chỉ đọc.
+	// Có thể dùng identity của server hoặc của user đều được.
+	result, err := h.Fabric.Contract.EvaluateTransaction("QueryShipmentsByFacility", facilityID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query shipments by facility", "details": err.Error()})
+		return
+	}
+
+	c.Data(http.StatusOK, "application/json", result)
+}
+
+// CompleteShipment cho phép tài xế đánh dấu lô hàng là hoàn thành.
+// Chỉ dùng để test, không dùng trong thực tế.
+func (h *ShipmentHandler) CompleteShipment(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+
+	shipmentID := c.Param("id")
+	_, err = contract.SubmitTransaction("CompleteShipment", shipmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Shipment " + shipmentID + " has been completed."})
 }
