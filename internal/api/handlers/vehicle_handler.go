@@ -64,7 +64,7 @@ func (h *VehicleHandler) CreateVehicle(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"vehicleID": newVehicle.VehicleID, "id": result.InsertedID})
 }
 
-// GetVehiclesByDriver lấy danh sách xe của một tài xế
+
 func (h *VehicleHandler) GetVehiclesByDriver(c *gin.Context) {
 	driverID := c.Param("id")
 	collection := h.DB.Collection("vehicles")
