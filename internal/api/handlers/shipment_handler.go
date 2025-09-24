@@ -152,6 +152,12 @@ func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 
 func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	facilityID := c.GetString("user_facility_id")
+	if facilityID == "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "User does not have an associated facility"})
+		return
+	}
+
 	enrollmentID := enrollmentIDInterface.(string)
 
 	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
@@ -206,6 +212,7 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 	// =================================================
 	notification := map[string]string{
 		"type":       "pickup_confirmed",
+		"facilityID": facilityID,
 		"shipmentID": shipmentID,
 		"driverID":   driverToNotify,
 		"message":    "Pickup has been confirmed for shipment " + shipmentID,
@@ -247,6 +254,12 @@ func (h *ShipmentHandler) StartShipment(c *gin.Context) {
 
 func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	facilityID := c.GetString("user_facility_id")
+	if facilityID == "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "User does not have an associated facility"})
+		return
+	}
+
 	enrollmentID := enrollmentIDInterface.(string)
 
 	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
@@ -300,6 +313,7 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	// =================================================
 	notification := map[string]string{
 		"type":       "delivery_confirmed",
+		"facilityID": facilityID,
 		"shipmentID": shipmentID,
 		"driverID":   driverToNotify,
 		"message":    "Delivery has been confirmed for shipment " + shipmentID,
