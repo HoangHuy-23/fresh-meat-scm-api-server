@@ -553,5 +553,14 @@ func (h *ShipmentHandler) CompleteShipment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
+
+	vehicleID := c.Param("vehicleID")
+	// Cập nhật trạng thái xe trong MongoDB
+	vehicleCollection := h.DB.Collection("vehicles")
+	_, err = vehicleCollection.UpdateOne(context.Background(), bson.M{"vehicleID": vehicleID}, bson.M{"$set": bson.M{"status": "AVAILABLE"}})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vehicle status", "details": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Shipment " + shipmentID + " has been completed."})
 }
