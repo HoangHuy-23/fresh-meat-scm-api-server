@@ -156,7 +156,7 @@ func SetupRouter(
 				adminTestRoutes := shipments.Group("/test")
 				adminTestRoutes.Use(middleware.Authorize("superadmin"))
 				{
-					adminTestRoutes.POST("/:id/complete", shipmentHandler.CompleteShipment)
+					adminTestRoutes.POST("/:id/:vehicleID/complete", shipmentHandler.CompleteShipment)
 				}
 			}
 
