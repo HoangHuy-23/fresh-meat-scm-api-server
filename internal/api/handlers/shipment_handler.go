@@ -210,14 +210,14 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 	}
 	driverToNotify := shipmentInfo.DriverEnrollmentID
 	// =================================================
-	notification := map[string]string{
-		"type":       "pickup_confirmed",
-		"facilityID": facilityID,
-		"shipmentID": shipmentID,
-		"driverID":   driverToNotify,
-		"message":    "Pickup has been confirmed for shipment " + shipmentID,
+	notificationPayload := map[string]interface{}{
+		"event": "pickup_confirmed", // <-- Đổi "type" thành "event"
+		"payload": map[string]string{ // <-- Tạo một map con "payload"
+			"shipmentID": shipmentID,
+			"facilityID": req.FacilityID, // Dùng facilityID từ request body để chắc chắn
+		},
 	}
-	notificationJSON, _ := json.Marshal(notification)
+	notificationJSON, _ := json.Marshal(notificationPayload) // <-- Đổi tên biến cho rõ ràng
 	if err := h.Hub.Send(driverToNotify, notificationJSON); err != nil {
 		log.Printf("Failed to send WebSocket notification: %v", err)
 	}
@@ -311,14 +311,14 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	}
 	driverToNotify := shipmentInfo.DriverEnrollmentID
 	// =================================================
-	notification := map[string]string{
-		"type":       "delivery_confirmed",
-		"facilityID": facilityID,
-		"shipmentID": shipmentID,
-		"driverID":   driverToNotify,
-		"message":    "Delivery has been confirmed for shipment " + shipmentID,
+	notificationPayload := map[string]interface{}{
+		"event": "delivery_confirmed", // <-- Đổi "type" thành "event"
+		"payload": map[string]string{ // <-- Tạo một map con "payload"
+			"shipmentID": shipmentID,
+			"facilityID": req.FacilityID,
+		},
 	}
-	notificationJSON, _ := json.Marshal(notification)
+	notificationJSON, _ := json.Marshal(notificationPayload)
 	if err := h.Hub.Send(driverToNotify, notificationJSON); err != nil {
 		log.Printf("Failed to send WebSocket notification: %v", err)
 	}
