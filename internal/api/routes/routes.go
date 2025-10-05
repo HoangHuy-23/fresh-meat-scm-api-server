@@ -197,6 +197,14 @@ func SetupRouter(
 				processors.GET("/:id/assets/processed", assetHandler.GetProcessedAssetsByProcessor)
 			}
 
+			// Group cho retailers
+			retailers := businessRoutes.Group("/retailers")
+			retailers.Use(middleware.Authorize("admin", "worker"))
+			{
+				// :id ở đây là facilityID của cửa hàng bán lẻ
+				retailers.GET("/:id/assets", assetHandler.GetAssetsAtRetailerByStatus)
+			}
+
 			dispatchRequests := businessRoutes.Group("/dispatch-requests")
 			{
 				// Route cho worker/admin tạo yêu cầu
