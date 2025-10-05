@@ -131,7 +131,7 @@ func SetupRouter(
 				workerShipmentRoutes.Use(middleware.Authorize("admin", "worker"))
 				{
 					workerShipmentRoutes.POST("/:id/pickup", shipmentHandler.ConfirmPickup)
-					workerShipmentRoutes.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
+					workerShipmentRoutes.POST("/:id/delivery", shipmentHandler.ConfirmDelivery)
 				}
 				
 				// Route chỉ cho driver
