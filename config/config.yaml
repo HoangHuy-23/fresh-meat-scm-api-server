@@ -17,6 +17,9 @@ s3:
   secretAccessKey: ""
   cloudFrontDomain: ""  # Thêm trường này để lưu tên miền CloudFront
 
+n8n:
+  dispatchWebhookURL: ""  # URL webhook để gửi yêu cầu dispatch
+
 fabric:
   channelName: "meatchannel"
   chaincodeName: "meatcc"

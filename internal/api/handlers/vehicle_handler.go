@@ -85,3 +85,27 @@ func (h *VehicleHandler) GetVehiclesByDriver(c *gin.Context) {
 
 	c.JSON(http.StatusOK, vehicles)
 }
+
+// GetVehicles lấy tất cả phương tiện theo status
+func (h *VehicleHandler) GetVehicles(c *gin.Context) {
+	status := c.Query("status")
+	collection := h.DB.Collection("vehicles")
+	filter := bson.M{}
+	if status != "" {
+		filter["status"] = status
+	}
+	// ... (tìm và trả về danh sách xe) ...
+	cursor, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query vehicles"})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var vehicles []models.Vehicle
+	if err := cursor.All(context.Background(), &vehicles); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode vehicles"})
+		return
+	}
+	c.JSON(http.StatusOK, vehicles)
+}
