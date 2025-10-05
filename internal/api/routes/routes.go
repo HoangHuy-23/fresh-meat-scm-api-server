@@ -34,6 +34,7 @@ func SetupRouter(
 	webSocketHandler := &handlers.WebSocketHandler{Hub: wsHub} // <-- KHỞI TẠO WEBSOCKET HANDLER
 	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub, Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO DISPATCH HANDLER
 	vehicleHandler := &handlers.VehicleHandler{DB: db} // <-- KHỞI TẠO VEHICLE HANDLER
+	productHandler := &handlers.ProductHandler{Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO PRODUCT HANDLER
 
 	apiV1 := router.Group("/api/v1")
 	{
@@ -52,6 +53,10 @@ func SetupRouter(
 		{
 			// API truy xuất nguồn gốc, không cần JWT
 			public.GET("/assets/:id/trace", assetHandler.GetAssetTrace)
+			// API lấy danh sách phương tiện theo status
+			public.GET("/vehicles", vehicleHandler.GetVehicles)
+			// API lấy danh sách sản phẩm
+			public.GET("/products", productHandler.GetAllProducts)
 		}
 
 
@@ -80,6 +85,13 @@ func SetupRouter(
 			vehicles := admin.Group("/vehicles")
 			{
 				vehicles.POST("/", vehicleHandler.CreateVehicle)
+				// Chúng ta có thể thêm các route GET, PUT, DELETE tương tự nếu cần
+			}
+
+			// Product management (CRUD)
+			products := admin.Group("/products")
+			{
+				products.POST("/", productHandler.CreateProducts)
 				// Chúng ta có thể thêm các route GET, PUT, DELETE tương tự nếu cần
 			}
 		}

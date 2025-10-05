@@ -40,10 +40,15 @@ type S3Config struct {
 	CloudFrontDomain string `mapstructure:"cloudFrontDomain"`
 }
 
+type N8NConfig struct {
+	DispatchWebhookURL string `mapstructure:"dispatchWebhookURL"`
+}
+
 // --- Struct Config chính, bao gồm tất cả các struct con ---
 
 type Config struct {
 	Server ServerConfig `mapstructure:"server"`
+	N8N    N8NConfig    `mapstructure:"n8n"`
 	Mongo  MongoConfig  `mapstructure:"mongo"`
 	JWT    JWTConfig    `mapstructure:"jwt"`
 	Fabric FabricConfig `mapstructure:"fabric"`
@@ -82,6 +87,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.BindEnv("s3.accessKeyID", "S3_ACCESS_KEY_ID")
 	viper.BindEnv("s3.secretAccessKey", "S3_SECRET_ACCESS_KEY")
 	viper.BindEnv("s3.cloudFrontDomain", "S3_CLOUDFRONT_DOMAIN")
+	viper.BindEnv("n8n.dispatchWebhookURL", "N8N_DISPATCH_WEBHOOK_URL")
 	// -------------------------------------------------
 
 	// Đọc file config.yaml
