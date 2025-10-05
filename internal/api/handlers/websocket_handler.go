@@ -10,7 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket" // <-- Giữ nguyên tên này cho thư viện gorilla
+	"time"
 )
+
+// Thời gian chờ tối đa cho một tin nhắn từ client.
+const pongWait = 30 * time.Second
 
 var upgrader = websocket.Upgrader{ // <-- Phải là websocket.Upgrader của gorilla
 	ReadBufferSize:  1024,
@@ -56,9 +60,25 @@ func (h *WebSocketHandler) ServeWs(c *gin.Context) {
 		conn.Close()
 	}()
 
+	// 4. Thiết lập cơ chế xử lý Pong (Heartbeat)
+	// Đặt thời gian chờ tối đa để nhận một tin nhắn pong từ client.
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	// Khi nhận được một tin nhắn pong, hãy reset lại thời gian chờ.
+	// Khi nhận được một tin nhắn PING từ client, chúng ta reset lại deadline.
+	// Thư viện gorilla/websocket sẽ tự động gửi lại PONG.
+	conn.SetPingHandler(func(string) error {
+		log.Printf("Received PING from %s, extending deadline", userID)
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	// Khởi chạy Vòng Lặp Đọc (Read Loop)
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Unexpected close error: %v", err)
+			}
 			break
 		}
 	}
