@@ -8,6 +8,7 @@ import (
 	"log"
 	"encoding/json"
 	"strings"
+	"bytes"
 	"fresh-meat-scm-api-server/internal/models"
 	"fresh-meat-scm-api-server/internal/socket"
 	"fresh-meat-scm-api-server/internal/blockchain"
@@ -76,6 +77,27 @@ func (h *DispatchHandler) CreateDispatchRequest(c *gin.Context) {
 	}
 
 	newRequest.ID = result.InsertedID.(primitive.ObjectID)
+
+	// Gửi yêu cầu đến n8n qua webhook
+	webhookURL := h.Cfg.N8N.DispatchWebhookURL
+	if webhookURL != "" {
+		jsonData, err := json.Marshal(newRequest)
+		if err != nil {
+			log.Printf("Failed to marshal dispatch request for webhook: %v", err)
+		} else {
+			go func() {
+				resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
+				if err != nil {
+					log.Printf("Failed to send dispatch request to n8n webhook: %v", err)
+					return
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+					log.Printf("n8n webhook responded with status: %s", resp.Status)
+				}
+			}()
+		}
+	}
 
 	// Gửi thông báo WebSocket đến các admin (nếu cần)
 

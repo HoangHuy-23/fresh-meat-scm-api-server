@@ -4,6 +4,8 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"time"
+	"strings"
 	"net/http"
 	"context"
 	"fresh-meat-scm-api-server/config"
@@ -29,15 +31,14 @@ type AssetHandler struct {
 // }
 
 type CreateFarmingBatchRequest struct {
-	AssetID     string          `json:"assetID" binding:"required"`
-	ProductName string          `json:"productName" binding:"required"`
+	SKU         string          `json:"sku" binding:"required"`
 	Quantity    models.Quantity `json:"quantity" binding:"required"`
+	SourceType  string          `json:"sourceType" binding:"required"`
 	Details     json.RawMessage `json:"details" binding:"required"`
 }
 
 type ChildAssetInputAPI struct {
-	AssetID     string          `json:"assetID" binding:"required"`
-	ProductName string          `json:"productName" binding:"required"`
+	SKU         string          `json:"sku" binding:"required"`
 	Quantity    models.Quantity `json:"quantity" binding:"required"`
 }
 
@@ -120,13 +121,29 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 	}
 	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
+	productJSON, err := h.Fabric.Contract.EvaluateTransaction("GetProduct", req.SKU)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Product with SKU '%s' not found on-chain", req.SKU)})
+		return
+	}
+	var product struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(productJSON, &product); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse product data from chaincode"})
+		return
+	}
+	productName := product.Name
 
-	_, err = contract.SubmitTransaction("CreateFarmingBatch", req.AssetID, req.ProductName, string(quantityJSON), string(finalFarmDetailsJSON))
+	// Tự động tạo một ID mới
+	assetID := generateAssetID(req.SourceType)
+
+	_, err = contract.SubmitTransaction("CreateFarmingBatch", assetID, productName, req.SKU, string(quantityJSON), string(finalFarmDetailsJSON))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"status": "success", "assetID": req.AssetID})
+	c.JSON(http.StatusCreated, gin.H{"status": "success", "assetID": assetID})
 }
 
 func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {
@@ -172,7 +189,7 @@ func (h *AssetHandler) ProcessAndSplitBatch(c *gin.Context) {
 		return
 	}
 
-	childAssetsJSON, _ := json.Marshal(req.ChildAssets)
+	//childAssetsJSON, _ := json.Marshal(req.ChildAssets)
 
 	// Truy vấn MongoDB để lấy thông tin đầy đủ của cơ sở
 	var facility models.Facility
@@ -204,6 +221,29 @@ func (h *AssetHandler) ProcessAndSplitBatch(c *gin.Context) {
 	}
 	finalDetailsJSON, _ := json.Marshal(finalProcessingDetails)
 	// ===================================
+
+	// --- LÀM GIÀU THÔNG TIN SẢN PHẨM CHO CHILD ASSETS ---
+	enrichedChildAssets := []map[string]interface{}{}
+	// Giả định Product Catalog được lưu on-chain
+	for _, child := range req.ChildAssets {
+		productJSON, err := h.Fabric.Contract.EvaluateTransaction("GetProduct", child.SKU)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Product with SKU '%s' not found on-chain", child.SKU)})
+			return
+		}
+		var product map[string]interface{}
+		json.Unmarshal(productJSON, &product)
+
+		enrichedChild := map[string]interface{}{
+			"assetID":     generateChildAssetID(strings.Split(child.SKU, "-")[2]), // PORK-20251005-3BMD -> 3BMD-xxxxxx
+			"productName": product["name"],
+			"sku":         child.SKU,
+			"quantity":    child.Quantity,
+		}
+		enrichedChildAssets = append(enrichedChildAssets, enrichedChild)
+	}
+	childAssetsJSON, _ := json.Marshal(enrichedChildAssets)
+	// -------------------------------------------------
 
 	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
 	if err != nil {
@@ -468,4 +508,30 @@ func (h *AssetHandler) GetProcessedAssetsByProcessor(c *gin.Context) {
 	}
 
 	c.Data(http.StatusOK, "application/json", result)
+}
+
+// generateAssetID tạo một ID duy nhất cho asset dựa trên loại nguồn và ngày hiện tại
+func generateAssetID(sourceType string) string {
+	prefix := "FARM"
+	if sourceType != "" {
+		prefix = prefix + "-" + strings.ToUpper(sourceType)
+	}
+
+	datePart := time.Now().Format("20060102")
+
+	randomPart := randString(4)
+
+	return fmt.Sprintf("%s-%s-%s", prefix, datePart, randomPart)
+}
+
+// generateChildAssetID tạo một ID duy nhất cho child asset dựa trên SKU và ngày hiện tại
+func generateChildAssetID(sku string) string {
+	prefix := "PRO"
+	if sku != "" {
+		prefix = prefix + "-" + strings.ToUpper(sku)
+	}
+	datePart := time.Now().Format("20060102")
+
+	randomPart := randString(6)
+	return fmt.Sprintf("%s-%s-%s", prefix, datePart, randomPart)
 }
