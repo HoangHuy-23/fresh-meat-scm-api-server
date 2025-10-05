@@ -510,6 +510,29 @@ func (h *AssetHandler) GetProcessedAssetsByProcessor(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", result)
 }
 
+// GetAssetsAtRetailerByStatus lấy các lô sản phẩm tại một cơ sở bán lẻ.
+func (h *AssetHandler) GetAssetsAtRetailerByStatus(c *gin.Context) {
+	facilityID := c.Param("id")
+	status := c.Query("status")
+	enrollmentID := c.GetString("user_enrollment_id")
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+	network, _ := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	// Trạng thái có thể là "AT_RETAILER" hoặc "ON_SHELF"
+	result, err := contract.EvaluateTransaction("QueryAssetsAtRetailerByStatus", facilityID, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query retailer assets", "details": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", result)
+}
+
 // generateAssetID tạo một ID duy nhất cho asset dựa trên loại nguồn và ngày hiện tại
 func generateAssetID(sourceType string) string {
 	prefix := "FARM"
