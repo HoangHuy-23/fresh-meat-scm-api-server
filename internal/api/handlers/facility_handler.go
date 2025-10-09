@@ -30,6 +30,10 @@ type CreateFacilityRequest struct {
 	Address    AddressRequest `json:"address" binding:"required"`
 }
 
+type UpdateFacilityStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=ACTIVE INACTIVE MAINTENANCE FULL_CAPACITY"`
+}
+
 // CreateFacility tạo một cơ sở mới
 func (h *FacilityHandler) CreateFacility(c *gin.Context) {
 	var req CreateFacilityRequest
@@ -62,6 +66,7 @@ func (h *FacilityHandler) CreateFacility(c *gin.Context) {
 		Name:       req.Name,
 		Type:       req.Type,
 		Address:    fullAddress,
+		Status:     "ACTIVE", // Mặc định trạng thái là ACTIVE khi tạo mới
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
@@ -161,4 +166,26 @@ func (h *FacilityHandler) DeleteFacility(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Facility deleted successfully"})
+}
+
+// UpdateFacilityStatus cập nhật trạng thái của cơ sở theo facilityID
+func (h *FacilityHandler) UpdateFacilityStatus(c *gin.Context) {
+	facilityID := c.Param("id")
+	var req UpdateFacilityStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	collection := h.DB.Collection("facilities")
+
+	// Cập nhật trạng thái cơ sở
+	_, err := collection.UpdateOne(context.Background(), bson.M{"facilityID": facilityID}, bson.M{"$set": bson.M{
+		"status":    req.Status,
+		"updatedAt": time.Now(),
+	}})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update facility status"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Facility status updated successfully"})
 }

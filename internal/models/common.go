@@ -19,3 +19,8 @@ type ItemInShipmentAPI struct {
 	AssetID  string   `bson:"assetID,omitempty" json:"assetID"`
 	Quantity Quantity `bson:"quantity,omitempty" json:"quantity"`
 }
+
+type Weight struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"` // e.g., kg, g
+}

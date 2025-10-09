@@ -34,6 +34,7 @@ type CreateFarmingBatchRequest struct {
 	SKU         string          `json:"sku" binding:"required"`
 	Quantity    models.Quantity `json:"quantity" binding:"required"`
 	SourceType  string          `json:"sourceType" binding:"required"`
+	AverageWeight *models.Weight `json:"averageWeight"`
 	Details     json.RawMessage `json:"details" binding:"required"`
 }
 
@@ -127,7 +128,8 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 		return
 	}
 	var product struct {
-		Name string `json:"name"`
+		Name          string        `json:"name"`
+		AverageWeight models.Weight `json:"averageWeight"`
 	}
 	if err := json.Unmarshal(productJSON, &product); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse product data from chaincode"})
@@ -135,10 +137,27 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 	}
 	productName := product.Name
 
+	var finalAverageWeight models.Weight
+	if req.AverageWeight != nil {
+		finalAverageWeight = *req.AverageWeight
+	} else {
+		finalAverageWeight = product.AverageWeight
+	}
+	finalAverageWeightJSON, _ := json.Marshal(finalAverageWeight)
+
+
 	// Tự động tạo một ID mới
 	assetID := generateAssetID(req.SourceType)
 
-	_, err = contract.SubmitTransaction("CreateFarmingBatch", assetID, productName, req.SKU, string(quantityJSON), string(finalFarmDetailsJSON))
+	_, err = contract.SubmitTransaction(
+		"CreateFarmingBatch", 
+		assetID, 
+		productName, 
+		req.SKU, 
+		string(quantityJSON), 
+		string(finalFarmDetailsJSON), 
+		string(finalAverageWeightJSON),
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return

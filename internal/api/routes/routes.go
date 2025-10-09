@@ -178,6 +178,8 @@ func SetupRouter(
 				facilities.GET("/:id/assets", assetHandler.GetAssetsByFacility)
 				facilities.GET("/my/assets", assetHandler.GetAssetsByMyFacility)
 				facilities.GET("/:id/shipments", shipmentHandler.GetShipmentsByFacility)
+				//
+				facilities.PATCH("/:id/status", facilityHandler.UpdateFacilityStatus) 
 			}
 
 			// Drivers 
