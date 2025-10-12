@@ -8,9 +8,12 @@ import (
 	"strings"
 	"net/http"
 	"context"
+	"io"
+	"bytes"
 	"fresh-meat-scm-api-server/config"
 	"fresh-meat-scm-api-server/internal/blockchain"
 	"fresh-meat-scm-api-server/internal/models"
+	"fresh-meat-scm-api-server/internal/s3"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -20,6 +23,7 @@ import (
 type AssetHandler struct {
 	Fabric *blockchain.FabricSetup
 	Cfg    config.Config
+	S3Uploader     *s3.Uploader
 	DB     *mongo.Database
 }
 
@@ -59,6 +63,34 @@ type GenericDetailsRequest struct {
 	Details json.RawMessage `json:"details" binding:"required"`
 }
 
+type MediaPointer struct {
+	URL      string `json:"url"`
+	MimeType string `json:"mimeType"`
+}
+
+// Feed lưu trữ thông tin về thức ăn.
+type Feed struct {
+    Name         string  `json:"name" binding:"required"`          // Tên loại thức ăn (vd: "Green Feed tập ăn")
+    DosageKg     float64 `json:"dosageKg" binding:"required"`      // Liều lượng mỗi ngày (kg/con hoặc kg/tổng đàn)
+    StartDate    string  `json:"startDate" binding:"required"`     // Ngày bắt đầu sử dụng (YYYY-MM-DD)
+    EndDate      string  `json:"endDate"`       // (Tùy chọn) Ngày kết thúc sử dụng
+    Notes        string  `json:"notes"`         // (Tùy chọn) Ghi chú thêm như "giai đoạn tập ăn", "tăng trọng"
+}
+
+// Medication lưu trữ thông tin về thuốc và chất bổ sung.
+type Medication struct {
+    Name         string  `json:"name" binding:"required"`          // Tên thuốc/chất bổ sung (vd: "Vaccine A", "Vitamin B")
+    Dose         string  `json:"dose" binding:"required"`          // Liều lượng (vd: "1ml", "500mg")
+    DateApplied  string  `json:"dateApplied" binding:"required"`   // Ngày áp dụng (YYYY-MM-DD)
+    NextDueDate  string  `json:"nextDueDate" binding:"required"`   // Ngày đến hạn tiếp theo (YYYY-MM-DD)
+}
+
+// Certificate lưu trữ thông tin về chứng nhận.
+type Certificate struct {
+	Name  string       `json:"name"`
+	Media MediaPointer `json:"media"`
+}
+
 // --- Handlers ---
 
 func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
@@ -94,16 +126,16 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 
 	// Xây dựng object `FarmDetails` cuối cùng để gửi tới chaincode
 	finalFarmDetails := map[string]interface{}{
-		"facilityID":  facility.FacilityID, // Ghi lại ID của cơ sở
-		"facilityName": facility.Name,       // Ghi lại tên đầy đủ
-		"address":      facility.Address,    // Gửi cả object address có tọa độ
-		// Thêm các trường từ request của user
-		"sowingDate":   userDetails["sowingDate"],
-		"startDate":    userDetails["startDate"],
+		"facilityID":     		facility.FacilityID, // Ghi lại ID của cơ sở
+		"facilityName": 		facility.Name,       // Ghi lại tên đầy đủ
+		"address":      		facility.Address,    // Gửi cả object address có tọa độ
+		"sowingDate":   		userDetails["sowingDate"],
+		"startDate":    		userDetails["startDate"],
 		"expectedHarvestDate":  userDetails["expectedHarvestDate"],
-		"feed":  userDetails["feed"],
-		"medications":   userDetails["medications"],
-		"certificates": userDetails["certificates"],
+		"harvestDate":          userDetails["harvestDate"],
+		"feeds":                userDetails["feeds"],
+		"medications":          userDetails["medications"],
+		"certificates":         userDetails["certificates"],
 	}
 	finalFarmDetailsJSON, _ := json.Marshal(finalFarmDetails)
 	// ===================================
@@ -163,6 +195,173 @@ func (h *AssetHandler) CreateFarmingBatch(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"status": "success", "assetID": assetID})
+}
+
+// AddFeedToFarmingBatch thêm một bản ghi thức ăn mới vào một lô hàng.
+func (h *AssetHandler) AddFeedToFarmingBatch(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	assetID := c.Param("id")
+	var req Feed
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	feedJSON, _ := json.Marshal(req)
+	_, err = contract.SubmitTransaction("AddFeedToFarmingBatch", assetID, string(feedJSON))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Feed added to farming batch"})
+}
+
+// AddMedicationToFarmingBatch thêm một bản ghi thuốc mới.
+func (h *AssetHandler) AddMedicationToFarmingBatch(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	assetID := c.Param("id")
+	var req Medication
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	medicationJSON, _ := json.Marshal(req)
+	_, err = contract.SubmitTransaction("AddMedicationToFarmingBatch", assetID, string(medicationJSON))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Medication added to farming batch"})
+}
+
+// UpdateHarvestDate cập nhật ngày thu hoạch thực tế.
+func (h *AssetHandler) UpdateHarvestDate(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	assetID := c.Param("id")
+	var req struct {
+		HarvestDate string `json:"harvestDate" binding:"required"` // YYYY-MM-DD
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Kiểm tra định dạng ngày tháng
+	if _, err := time.Parse("2006-01-02", req.HarvestDate); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD."})
+		return
+	}
+	_, err = contract.SubmitTransaction("UpdateHarvestDate", assetID, req.HarvestDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Harvest date updated for asset " + assetID})
+}
+
+// AddCertificatesToFarmingBatch thêm các chứng chỉ mới cho một lô hàng.
+func (h *AssetHandler) AddCertificatesToFarmingBatch(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	assetID := c.Param("id")
+
+	// todo: s3 upload, sau đó lấy URL trả về
+	fileHeader, err := c.FormFile("photo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Photo file is required"})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read uploaded file"})
+		return
+	}
+
+	objectKey := fmt.Sprintf("certificates/%s/%d_%s", assetID, time.Now().Unix(), fileHeader.Filename)
+	fileReader := bytes.NewReader(fileBytes)
+	photoURL, err := h.S3Uploader.UploadFile(c.Request.Context(), fileReader, objectKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file to S3", "details": err.Error()})
+		return
+	}
+
+	var req Certificate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Media = MediaPointer{
+		URL: photoURL,
+	}
+	certJSON, _ := json.Marshal(req)
+	_, err = contract.SubmitTransaction("AddCertificatesToFarmingBatch", assetID, string(certJSON))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
 }
 
 func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {

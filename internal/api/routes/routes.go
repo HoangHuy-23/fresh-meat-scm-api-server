@@ -27,7 +27,7 @@ func SetupRouter(
 	router.Use(gin.Recovery())
 
 	// Khởi tạo các handlers
-	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup, Cfg: cfg, DB: db}
+	assetHandler := &handlers.AssetHandler{Fabric: fabricSetup, Cfg: cfg, DB: db, S3Uploader: s3Uploader}
 	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup, Cfg: cfg, DB: db, S3Uploader: s3Uploader, Hub: wsHub} // <-- TRUYỀN S3 UPLOADER VÀO ĐÂY
 	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
@@ -121,6 +121,11 @@ func SetupRouter(
 			assets := businessRoutes.Group("/assets")
 			{
 				assets.POST("/farming", assetHandler.CreateFarmingBatch)
+				assets.POST("/:id/farming/feeds", assetHandler.AddFeedToFarmingBatch)
+				assets.POST("/:id/farming/medications", assetHandler.AddMedicationToFarmingBatch)
+				assets.POST("/:id/farming/certificates", assetHandler.AddCertificatesToFarmingBatch)
+				assets.PATCH("/:id/farming/harvest-date", assetHandler.UpdateHarvestDate)
+
 				assets.PUT("/:id/farming-details", assetHandler.UpdateFarmingDetails)
 				assets.POST("/split", assetHandler.ProcessAndSplitBatch)
 				assets.POST("/:id/storage", assetHandler.UpdateStorageInfo)
