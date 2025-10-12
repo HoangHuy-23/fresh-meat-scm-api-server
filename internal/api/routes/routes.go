@@ -32,7 +32,9 @@ func SetupRouter(
 	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
 	webSocketHandler := &handlers.WebSocketHandler{Hub: wsHub} // <-- KHỞI TẠO WEBSOCKET HANDLER
-	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub, Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO DISPATCH HANDLER
+	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub} // <-- KHỞI TẠO DISPATCH HANDLER
+	replenishmentHandler := &handlers.ReplenishmentHandler{DB: db, Hub: wsHub} // <-- KHỞI TẠO REPLENISHMENT HANDLER
+	bidHandler := &handlers.BidHandler{DB: db, Hub: wsHub, Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO BID HANDLER
 	vehicleHandler := &handlers.VehicleHandler{DB: db} // <-- KHỞI TẠO VEHICLE HANDLER
 	productHandler := &handlers.ProductHandler{Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO PRODUCT HANDLER
 
@@ -57,6 +59,11 @@ func SetupRouter(
 			public.GET("/vehicles", vehicleHandler.GetVehicles)
 			// API lấy danh sách sản phẩm
 			public.GET("/products", productHandler.GetAllProducts)
+			// API lấy thông tin facility công khai
+			public.GET("/facilities/public", facilityHandler.GetAllFacilities)
+
+			// API AI Agent transport bid
+			public.POST("/ai/transport-bids", bidHandler.CreateTransportBid) 
 		}
 
 
@@ -205,6 +212,11 @@ func SetupRouter(
 			{
 				// :id ở đây là facilityID của cửa hàng bán lẻ
 				retailers.GET("/:id/assets", assetHandler.GetAssetsAtRetailerByStatus)
+
+				// Yêu cầu nhập hàng
+				retailers.POST("/replenishment-requests", replenishmentHandler.CreateReplenishmentRequest)
+				retailers.GET("/replenishment-requests/:requestID", replenishmentHandler.GetReplenishmentRequestByID)
+				retailers.GET("/replenishment-requests/mine", replenishmentHandler.GetMyReplenishmentRequests) // Lấy tất cả yêu cầu của cửa hàng hiện tại
 			}
 
 			dispatchRequests := businessRoutes.Group("/dispatch-requests")
@@ -234,6 +246,17 @@ func SetupRouter(
 				}
 			}
 
+			// === THÊM GROUP MỚI CHO REPLENISHMENT REQUESTS ===
+			replenishmentRequests := businessRoutes.Group("/replenishment-requests")
+			{
+				// Route cho super admin xem tất cả yêu cầu
+				superAdminRoute := replenishmentRequests.Group("/")
+				superAdminRoute.Use(middleware.Authorize("superadmin"))
+				{
+					superAdminRoute.GET("/", replenishmentHandler.GetAllReplenishmentRequests)
+				}
+			}
+
 			// === THÊM GROUP MỚI CHO TRANSPORT BIDS ===
 			transportBids := businessRoutes.Group("/transport-bids")
 			{
@@ -241,7 +264,7 @@ func SetupRouter(
 				adminRoute := transportBids.Group("/")
 				adminRoute.Use(middleware.Authorize("admin", "superadmin"))
 				{
-					adminRoute.POST("/", dispatchHandler.CreateTransportBid)
+					adminRoute.POST("/", bidHandler.CreateTransportBid)
 				}
 
 				// === THÊM ROUTE MỚI CHO DRIVER ===
@@ -249,9 +272,9 @@ func SetupRouter(
 				driverRoute.Use(middleware.Authorize("driver"))
 				{
 					// Lấy danh sách các gói thầu của tôi
-					driverRoute.GET("/mine", dispatchHandler.GetMyBids)
+					driverRoute.GET("/mine", bidHandler.GetMyBids)
 					// Chúng ta sẽ thêm route POST /:id/confirm vào đây
-					driverRoute.POST("/:id/confirm", dispatchHandler.ConfirmBid)
+					driverRoute.POST("/:id/confirm", bidHandler.ConfirmBid)
 				}
 				// =================================
 			}
