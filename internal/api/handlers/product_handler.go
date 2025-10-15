@@ -7,6 +7,7 @@ import (
 	"strings"
 	"math/rand"
 	"fmt"
+	"encoding/json"
 	"fresh-meat-scm-api-server/config"
 	"fresh-meat-scm-api-server/internal/blockchain"
 
@@ -18,22 +19,29 @@ type ProductHandler struct {
 	Cfg    config.Config
 }
 
+type Weight struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"` // e.g., kg, g
+}
+
 type Product struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Unit        string `json:"unit"`
-	SourceType  string `json:"sourceType"`
-	Category    string `json:"category"`
-	SKU         string `json:"sku"`
-	Active      bool   `json:"active"`
+	SKU           string `json:"sku"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Unit          string `json:"unit"` // e.g., con, khay, thùng
+	AverageWeight Weight `json:"averageWeight"`
+	SourceType    string `json:"sourceType"`
+	Category      string `json:"category"`
+	Active        bool   `json:"active"`
 }
 
 type CreateProductRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Description string `json:"description"`
-	Unit        string `json:"unit" binding:"required"`
-	SourceType  string `json:"sourceType" binding:"required"`
-	Category    string `json:"category" binding:"required"`
+	Name          string `json:"name" binding:"required"`
+	Description   string `json:"description"`
+	Unit          string `json:"unit" binding:"required"`
+	SourceType    string `json:"sourceType" binding:"required"`
+	Category      string `json:"category" binding:"required"`
+	AverageWeight Weight  `json:"averageWeight" binding:"required"`
 }
 
 // CreateProduct xử lý việc tạo sản phẩm mới on-chain.
@@ -57,6 +65,8 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	network, _ := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
 	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 
+	averageWeightJSON, _ := json.Marshal(req.AverageWeight)
+
 	// Gọi chaincode
 	_, err = contract.SubmitTransaction(
 		"CreateProduct",
@@ -66,6 +76,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		req.Unit,
 		req.SourceType,
 		req.Category,
+		string(averageWeightJSON),
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
@@ -110,6 +121,7 @@ func (h *ProductHandler) CreateProducts(c *gin.Context) {
 	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 	// Tạo sản phẩm từng cái một
 	for _, req := range reqs {
+		averageWeightJSON, _ := json.Marshal(req.AverageWeight)
 		_, err = contract.SubmitTransaction(
 			"CreateProduct",
 			generateSKU(req.SourceType),
@@ -118,6 +130,7 @@ func (h *ProductHandler) CreateProducts(c *gin.Context) {
 			req.Unit,
 			req.SourceType,
 			req.Category,
+			string(averageWeightJSON),
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})

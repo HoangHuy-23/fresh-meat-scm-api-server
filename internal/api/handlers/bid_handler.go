@@ -8,7 +8,6 @@ import (
 	"log"
 	"encoding/json"
 	"strings"
-	"bytes"
 	"fresh-meat-scm-api-server/internal/models"
 	"fresh-meat-scm-api-server/internal/socket"
 	"fresh-meat-scm-api-server/internal/blockchain"
@@ -21,170 +20,23 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type DispatchHandler struct {
+type BidHandler struct {
 	DB  *mongo.Database
 	Hub *socket.Hub
 	Fabric *blockchain.FabricSetup
 	Cfg config.Config
 }
 
-// Struct cho request body, không cần ToFacilityID
-type CreateDispatchRequestPayload struct {
-	Items []models.ItemInShipmentAPI `json:"items" binding:"required"`
-}
-
 // Struct cho request body của Admin
 type CreateTransportBidPayload struct {
 	OriginalRequestIDs []string               `json:"originalRequestIDs" binding:"required"`
 	BiddingAssignments []models.BidAssignment `json:"biddingAssignments" binding:"required"` // <-- THAY ĐỔI
-	ShipmentType       string                  `json:"shipmentType" binding:"required"`
+	ShipmentType       string                 `json:"shipmentType" binding:"required"`
 	Stops              []models.BidStop       `json:"stops" binding:"required"`
 }
 
-// CreateDispatchRequest xử lý việc tạo một yêu cầu xuất hàng mới.
-func (h *DispatchHandler) CreateDispatchRequest(c *gin.Context) {
-	creatorEnrollmentID := c.GetString("user_enrollment_id")
-	creatorFacilityID := c.GetString("user_facility_id")
-
-	var payload CreateDispatchRequestPayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// (Tùy chọn) Kiểm tra xem facility của người tạo có tồn tại không
-	facilityCollection := h.DB.Collection("facilities")
-	count, err := facilityCollection.CountDocuments(context.Background(), bson.M{"facilityID": creatorFacilityID})
-	if err != nil || count == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Originating facility does not exist."})
-		return
-	}
-
-	newRequest := models.DispatchRequest{
-		RequestID:      fmt.Sprintf("DR-%s", strings.ToUpper(uuid.New().String()[:8])),
-		FromFacilityID: creatorFacilityID, // Tự động lấy từ token của người tạo
-		Items:          payload.Items,
-		Status:         "PENDING",
-		CreatedBy:      creatorEnrollmentID,
-		CreatedAt:      time.Now(),
-	}
-
-	collection := h.DB.Collection("dispatch_requests") // Đổi tên collection
-	result, err := collection.InsertOne(context.Background(), newRequest)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create dispatch request"})
-		return
-	}
-
-	newRequest.ID = result.InsertedID.(primitive.ObjectID)
-
-	// Gửi yêu cầu đến n8n qua webhook
-	webhookURL := h.Cfg.N8N.DispatchWebhookURL
-	if webhookURL != "" {
-		jsonData, err := json.Marshal(newRequest)
-		if err != nil {
-			log.Printf("Failed to marshal dispatch request for webhook: %v", err)
-		} else {
-			go func() {
-				resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
-				if err != nil {
-					log.Printf("Failed to send dispatch request to n8n webhook: %v", err)
-					return
-				}
-				defer resp.Body.Close()
-				if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-					log.Printf("n8n webhook responded with status: %s", resp.Status)
-				}
-			}()
-		}
-	}
-
-	// Gửi thông báo WebSocket đến các admin (nếu cần)
-
-	c.JSON(http.StatusCreated, newRequest)
-}
-
-// GetAllDispatchRequests lấy danh sách các yêu cầu xuất hàng, có thể lọc theo trạng thái.
-func (h *DispatchHandler) GetAllDispatchRequests(c *gin.Context) {
-	// 1. Tạo một bộ lọc (filter) rỗng
-	filter := bson.M{}
-
-	// 2. Lấy query parameter "status" từ URL
-	// Ví dụ: /dispatch-requests?status=PENDING
-	status := c.Query("status")
-	if status != "" {
-		// Nếu có, thêm điều kiện lọc vào filter
-		filter["status"] = status
-	}
-
-	// 3. Truy vấn collection "dispatch_requests"
-	collection := h.DB.Collection("dispatch_requests")
-	cursor, err := collection.Find(context.Background(), filter)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query dispatch requests"})
-		return
-	}
-	defer cursor.Close(context.Background())
-
-	// 4. Decode kết quả vào một slice
-	var requests []models.DispatchRequest
-	if err = cursor.All(context.Background(), &requests); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode dispatch requests"})
-		return
-	}
-
-	// Đảm bảo trả về một mảng rỗng thay vì null nếu không có kết quả
-	if requests == nil {
-		requests = []models.DispatchRequest{}
-	}
-
-	// 5. Trả về kết quả
-	c.JSON(http.StatusOK, requests)
-}
-
-// GetMyFacilityDispatchRequests lấy danh sách các yêu cầu xuất hàng của facility hiện tại.
-func (h *DispatchHandler) GetMyFacilityDispatchRequests(c *gin.Context) {
-	facilityID := c.GetString("user_facility_id")
-	filter := bson.M{"fromFacilityID": facilityID}
-
-	collection := h.DB.Collection("dispatch_requests")
-	cursor, err := collection.Find(context.Background(), filter)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query dispatch requests"})
-		return
-	}
-	defer cursor.Close(context.Background())
-
-	var requests []models.DispatchRequest
-	if err = cursor.All(context.Background(), &requests); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode dispatch requests"})
-		return
-	}
-	if requests == nil {
-		requests = []models.DispatchRequest{}
-	}
-	c.JSON(http.StatusOK, requests)
-}
-
-// GetDispatchRequestByID lấy chi tiết một yêu cầu xuất hàng theo ID.
-func (h *DispatchHandler) GetDispatchRequestByID(c *gin.Context) {
-	requestID := c.Param("id")
-	collection := h.DB.Collection("dispatch_requests")
-	var request models.DispatchRequest
-	err := collection.FindOne(context.Background(), bson.M{"requestID": requestID}).Decode(&request)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Dispatch request not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve dispatch request"})
-		return
-	}
-	c.JSON(http.StatusOK, request)
-}
-
 // CreateTransportBid xử lý việc Admin gom nhóm và tạo gói mời thầu (VỚI TRANSACTION).
-func (h *DispatchHandler) CreateTransportBid(c *gin.Context) {
+func (h *BidHandler) CreateTransportBid(c *gin.Context) {
 	var payload CreateTransportBidPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -292,7 +144,7 @@ func (h *DispatchHandler) CreateTransportBid(c *gin.Context) {
 }
 
 // GetMyBids lấy danh sách các gói thầu mà tài xế đang đăng nhập được mời.
-func (h *DispatchHandler) GetMyBids(c *gin.Context) {
+func (h *BidHandler) GetMyBids(c *gin.Context) {
 	driverID := c.GetString("user_enrollment_id")
 
 	// Chỉ lấy các gói thầu đang ở trạng thái "BIDDING"
@@ -323,7 +175,7 @@ func (h *DispatchHandler) GetMyBids(c *gin.Context) {
 }
 
 // ConfirmBid xử lý việc tài xế xác nhận một gói thầu đã được Admin chỉ định xe.
-func (h *DispatchHandler) ConfirmBid(c *gin.Context) {
+func (h *BidHandler) ConfirmBid(c *gin.Context) {
 	bidID := c.Param("id")
 	driverID := c.GetString("user_enrollment_id")
 
