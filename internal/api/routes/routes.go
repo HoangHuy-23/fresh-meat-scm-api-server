@@ -121,10 +121,13 @@ func SetupRouter(
 			assets := businessRoutes.Group("/assets")
 			{
 				assets.POST("/farming", assetHandler.CreateFarmingBatch)
+				assets.GET("/:id/farming", assetHandler.GetAssetAtFarmByID)
 				assets.POST("/:id/farming/feeds", assetHandler.AddFeedToFarmingBatch)
 				assets.POST("/:id/farming/medications", assetHandler.AddMedicationToFarmingBatch)
 				assets.POST("/:id/farming/certificates", assetHandler.AddCertificatesToFarmingBatch)
 				assets.PATCH("/:id/farming/harvest-date", assetHandler.UpdateHarvestDate)
+				assets.PATCH("/:id/farming/average-weight", assetHandler.UpdateAverageWeight)
+				assets.PATCH("/:id/farming/expected-harvest-date", assetHandler.UpdateExpectedHarvestDate)
 
 				assets.PUT("/:id/farming-details", assetHandler.UpdateFarmingDetails)
 				assets.POST("/split", assetHandler.ProcessAndSplitBatch)
