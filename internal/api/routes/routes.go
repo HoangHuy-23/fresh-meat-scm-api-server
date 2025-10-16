@@ -64,6 +64,8 @@ func SetupRouter(
 
 			// API AI Agent transport bid
 			public.POST("/ai/transport-bids", bidHandler.CreateTransportBid) 
+
+			public.GET("/facilities/:id/inventory", assetHandler.QueryAssetsByFacilityAndSKU) 
 		}
 
 

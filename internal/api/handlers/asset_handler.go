@@ -855,6 +855,24 @@ func (h *AssetHandler) GetAssetsAtRetailerByStatus(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", result)
 }
 
+// QueryAssetsByFacilityAndSKU lấy các lô sản phẩm của một cơ sở theo SKU cụ thể.
+// public API, cần xác thực người dùng
+func (h *AssetHandler) QueryAssetsByFacilityAndSKU(c *gin.Context) {
+	facilityID := c.Param("id")
+	sku := c.Query("sku")
+	
+	resultJSON, err := h.Fabric.Contract.EvaluateTransaction("QueryAssetsByFacilityAndSKU", facilityID, sku)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query assets by facility and SKU", "details": err.Error()})
+		return
+	}
+	if resultJSON == nil || string(resultJSON) == "null" {
+		c.Data(http.StatusOK, "application/json", []byte("[]"))
+		return
+	}
+	c.Data(http.StatusOK, "application/json", resultJSON)
+}
+
 // generateAssetID tạo một ID duy nhất cho asset dựa trên loại nguồn và ngày hiện tại
 func generateAssetID(sourceType string) string {
 	prefix := "FARM"
