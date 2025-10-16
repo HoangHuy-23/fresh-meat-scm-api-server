@@ -263,6 +263,38 @@ func (h *AssetHandler) AddMedicationToFarmingBatch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Medication added to farming batch"})
 }
 
+// UpdateAverageWeight cập nhật trọng lượng trung bình của một lô hàng.
+func (h *AssetHandler) UpdateAverageWeight(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	assetID := c.Param("id")
+	var req models.Weight
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	weightJSON, _ := json.Marshal(req)
+	_, err = contract.SubmitTransaction("UpdateAverageWeight", assetID, string(weightJSON))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Average weight updated for asset " + assetID})
+}
+
 // UpdateHarvestDate cập nhật ngày thu hoạch thực tế.
 func (h *AssetHandler) UpdateHarvestDate(c *gin.Context) {
 	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
@@ -301,6 +333,44 @@ func (h *AssetHandler) UpdateHarvestDate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Harvest date updated for asset " + assetID})
 }
 
+// UpdateExpectedHarvestDate cập nhật ngày thu hoạch dự kiến.
+func (h *AssetHandler) UpdateExpectedHarvestDate(c *gin.Context) {
+	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
+	enrollmentID := enrollmentIDInterface.(string)
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	assetID := c.Param("id")
+	var req struct {
+		ExpectedHarvestDate string `json:"expectedHarvestDate" binding:"required"` // YYYY-MM-DD
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Kiểm tra định dạng ngày tháng
+	if _, err := time.Parse("2006-01-02", req.ExpectedHarvestDate); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD."})
+		return
+	}
+	_, err = contract.SubmitTransaction("UpdateExpectedHarvestDate", assetID, req.ExpectedHarvestDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Expected harvest date updated for asset " + assetID})
+}
+
 // AddCertificatesToFarmingBatch thêm các chứng chỉ mới cho một lô hàng.
 func (h *AssetHandler) AddCertificatesToFarmingBatch(c *gin.Context) {
 	enrollmentIDInterface, _ := c.Get("user_enrollment_id")
@@ -320,10 +390,15 @@ func (h *AssetHandler) AddCertificatesToFarmingBatch(c *gin.Context) {
 	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
 	assetID := c.Param("id")
 
-	// todo: s3 upload, sau đó lấy URL trả về
 	fileHeader, err := c.FormFile("photo")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Photo file is required"})
+		return
+	}
+
+	name := c.PostForm("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Certificate name is required"})
 		return
 	}
 
@@ -344,24 +419,53 @@ func (h *AssetHandler) AddCertificatesToFarmingBatch(c *gin.Context) {
 	fileReader := bytes.NewReader(fileBytes)
 	photoURL, err := h.S3Uploader.UploadFile(c.Request.Context(), fileReader, objectKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file to S3", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file to S3", "details": err.Error})
 		return
 	}
 
-	var req Certificate
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	newCert := Certificate{
+		Name: name, 
+		Media: MediaPointer{
+			URL: photoURL,
+		},
 	}
-	req.Media = MediaPointer{
-		URL: photoURL,
-	}
-	certJSON, _ := json.Marshal(req)
+
+	certsSlice := []Certificate{newCert}
+
+	certJSON, _ := json.Marshal(certsSlice)
+
 	_, err = contract.SubmitTransaction("AddCertificatesToFarmingBatch", assetID, string(certJSON))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit transaction", "details": err.Error()})
 		return
 	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Certificate added successfully"})
+}
+
+// GetAssetAtFarmByID lấy chi tiết một lô hàng tại trang trại.
+func (h *AssetHandler) GetAssetAtFarmByID(c *gin.Context) {
+	enrollmentID := c.GetString("user_enrollment_id")
+	assetID := c.Param("id")
+	// Cần sử dụng gateway của người dùng để chaincode có thể xác thực quyền
+	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
+		return
+	}
+	defer userGateway.Close()
+	network, err := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get network", "details": err.Error()})
+		return
+	}
+	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
+	result, err := contract.EvaluateTransaction("GetAssetAtFarmByID", assetID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found or access denied", "details": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", result)
 }
 
 func (h *AssetHandler) UpdateFarmingDetails(c *gin.Context) {
@@ -749,6 +853,24 @@ func (h *AssetHandler) GetAssetsAtRetailerByStatus(c *gin.Context) {
 		return
 	}
 	c.Data(http.StatusOK, "application/json", result)
+}
+
+// QueryAssetsByFacilityAndSKU lấy các lô sản phẩm của một cơ sở theo SKU cụ thể.
+// public API, cần xác thực người dùng
+func (h *AssetHandler) QueryAssetsByFacilityAndSKU(c *gin.Context) {
+	facilityID := c.Param("id")
+	sku := c.Query("sku")
+	
+	resultJSON, err := h.Fabric.Contract.EvaluateTransaction("QueryAssetsByFacilityAndSKU", facilityID, sku)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query assets by facility and SKU", "details": err.Error()})
+		return
+	}
+	if resultJSON == nil || string(resultJSON) == "null" {
+		c.Data(http.StatusOK, "application/json", []byte("[]"))
+		return
+	}
+	c.Data(http.StatusOK, "application/json", resultJSON)
 }
 
 // generateAssetID tạo một ID duy nhất cho asset dựa trên loại nguồn và ngày hiện tại
