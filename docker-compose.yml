@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    container_name: fresh-meat-scm-api-server
+    restart: unless-stopped
+    user: "0" # run as root to read host-mounted Fabric crypto files with restrictive permissions
+    network_mode: "host" # allow connections to localhost:7051 on the host (Fabric peer)
+    env_file:
+      - .env
+    environment:
+      GIN_MODE: ${GIN_MODE:-release}
+      PORT: ${SERVER_PORT:-8080}
+    # host network mode exposes the container directly; port mapping is unnecessary
+    volumes:
+      - ./config/config.yaml:/srv/app/config/config.yaml:ro
+      - ./connection-profile.yaml:/srv/app/connection-profile.yaml:ro
+      # Mount Fabric crypto materials so absolute paths used by code resolve inside container
+      - /home/lean1123/fresh-meat-scm-hyperledger-fabric:/home/lean1123/fresh-meat-scm-hyperledger-fabric:ro
