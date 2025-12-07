@@ -72,7 +72,7 @@ organizations:
         cert:
           path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem
         key:
-          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/ee004f59843d547846641a95fb529d5e390fbd575692a12bf19e181e7beb8027_sk
+          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/71bf1556bf308d57cb2d1bcb884eda575c7c79ed1b50adddfa928575c168bdbc_sk
   # Thêm định nghĩa cho RegulatorOrg để SDK biết về nó
   RegulatorOrg:
     mspid: RegulatorOrgMSP

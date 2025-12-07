@@ -15,10 +15,10 @@ s3:
   region: ""
   accessKeyID: ""
   secretAccessKey: ""
-  cloudFrontDomain: ""  # Thêm trường này để lưu tên miền CloudFront
+  cloudFrontDomain: "" # Thêm trường này để lưu tên miền CloudFront
 
 n8n:
-  dispatchWebhookURL: ""  # URL webhook để gửi yêu cầu dispatch
+  dispatchWebhookURL: "" # URL webhook để gửi yêu cầu dispatch
 
 fabric:
   channelName: "meatchannel"
@@ -26,5 +26,5 @@ fabric:
   orgName: "MeatSupplyOrg"
   userName: "superadmin"
   connectionProfile: "./connection-profile.yaml"
-  userCertPath: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem"
-  userKeyDir: "/home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/"
+  userCertPath: "/home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem"
+  userKeyDir: "/home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/"
