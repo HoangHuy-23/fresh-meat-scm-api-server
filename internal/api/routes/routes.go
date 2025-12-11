@@ -160,7 +160,7 @@ func SetupRouter(
 				workerShipmentRoutes.Use(middleware.Authorize("admin", "worker"))
 				{
 					workerShipmentRoutes.POST("/:id/pickup", shipmentHandler.ConfirmPickup)
-					workerShipmentRoutes.POST("/:id/deliver", shipmentHandler.ConfirmDelivery)
+					workerShipmentRoutes.POST("/:id/delivery", shipmentHandler.ConfirmDelivery)
 				}
 				
 				// Route chỉ cho driver
@@ -227,6 +227,15 @@ func SetupRouter(
 				retailers.POST("/replenishment-requests", replenishmentHandler.CreateReplenishmentRequest)
 				retailers.GET("/replenishment-requests/:requestID", replenishmentHandler.GetReplenishmentRequestByID)
 				retailers.GET("/replenishment-requests/mine", replenishmentHandler.GetMyReplenishmentRequests) // Lấy tất cả yêu cầu của cửa hàng hiện tại
+			}
+
+			// Group cho warehouses
+			warehouses := businessRoutes.Group("/warehouses")
+			warehouses.Use(middleware.Authorize("admin", "worker"))
+			{
+				// :id ở đây là facilityID của kho
+				warehouses.GET("/:id/assets", assetHandler.GetAssetsAtWarehouse)
+				warehouses.GET("/my/assets", assetHandler.GetMyAssetsAtWarehouse)
 			}
 
 			dispatchRequests := businessRoutes.Group("/dispatch-requests")

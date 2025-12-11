@@ -304,10 +304,20 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	}
 	var shipmentInfo struct {
 		DriverEnrollmentID string `json:"driverEnrollmentID"`
+		VehiclePlate       string `json:"vehiclePlate"`
+		Status			   string `json:"status"`
 	}
 	if err := json.Unmarshal(shipmentData, &shipmentInfo); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse shipment data"})
 		return
+	}
+	// update vehicle status to AVAILABLE if stop is final delivery
+	if shipmentInfo.Status == "COMPLETED" {
+		vehicleCollection := h.DB.Collection("vehicles")
+		_, err = vehicleCollection.UpdateOne(context.Background(), bson.M{"plateNumber": shipmentInfo.VehiclePlate}, bson.M{"$set": bson.M{"status": "AVAILABLE"}})
+		if err != nil {
+			log.Printf("Failed to update vehicle status: %v", err)
+		}
 	}
 	driverToNotify := shipmentInfo.DriverEnrollmentID
 	// =================================================

@@ -29,10 +29,11 @@ type BidHandler struct {
 
 // Struct cho request body của Admin
 type CreateTransportBidPayload struct {
-	OriginalRequestIDs []string               `json:"originalRequestIDs" binding:"required"`
-	BiddingAssignments []models.BidAssignment `json:"biddingAssignments" binding:"required"` // <-- THAY ĐỔI
-	ShipmentType       string                 `json:"shipmentType" binding:"required"`
-	Stops              []models.BidStop       `json:"stops" binding:"required"`
+	OriginalRequestIDs      []string               `json:"originalRequestIDs" binding:"required"`
+	FulfilledReplenishmentIDs []string             `json:"fulfilledReplenishmentIDs" binding:"required"`
+	BiddingAssignments      []models.BidAssignment `json:"biddingAssignments" binding:"required"` // <-- THAY ĐỔI
+	ShipmentType            string                 `json:"shipmentType" binding:"required"`
+	Stops                   []models.BidStop       `json:"stops" binding:"required"`
 }
 
 // CreateTransportBid xử lý việc Admin gom nhóm và tạo gói mời thầu (VỚI TRANSACTION).
@@ -69,78 +70,42 @@ func (h *BidHandler) CreateTransportBid(c *gin.Context) {
 		}
 	}
 
-	// Bắt đầu một session mới với MongoDB để thực hiện transaction
-	session, err := h.DB.Client().StartSession()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start database session"})
-		return
-	}
-	defer session.EndSession(context.Background())
-
-	// Định nghĩa logic transaction
-	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
-		// 1. Cập nhật trạng thái của tất cả OriginalRequestIDs thành "PROCESSED"
-		dispatchCollection := h.DB.Collection("dispatch_requests")
-		filter := bson.M{
-			"requestID": bson.M{"$in": payload.OriginalRequestIDs},
-			"status":    "PENDING",
-		}
-		update := bson.M{"$set": bson.M{"status": "PROCESSED"}}
-		
-		updateResult, err := dispatchCollection.UpdateMany(sessCtx, filter, update)
-		if err != nil {
-			return nil, err // Lỗi sẽ khiến transaction bị abort
-		}
-
-		// Kiểm tra xem có đúng số lượng request được cập nhật không
-		if updateResult.ModifiedCount != int64(len(payload.OriginalRequestIDs)) {
-			return nil, fmt.Errorf("could not process all requests. Some might have a non-PENDING status or do not exist")
-		}
+	expirationTime := time.Now().Add(1 * time.Minute) // sẽ update thành tham số đầu vào sau
 
 		// 2. Tạo TransportBid mới
-		newBid := models.TransportBid{
-			BidID:              fmt.Sprintf("BID-%s", strings.ToUpper(uuid.New().String()[:8])),
-			OriginalRequestIDs: payload.OriginalRequestIDs,
-			ShipmentType:       payload.ShipmentType,
-			BiddingAssignments: payload.BiddingAssignments,
-			Stops:              payload.Stops,
-			Status:             "BIDDING",
-			CreatedAt:          time.Now(),
-		}
-
-		bidCollection := h.DB.Collection("transport_bids")
-		result, err := bidCollection.InsertOne(sessCtx, newBid)
-		if err != nil {
-			return nil, err // Lỗi sẽ khiến transaction bị abort
-		}
-
-		// Gán lại ID đã được tạo để trả về
-		newBid.ID = result.InsertedID.(primitive.ObjectID)
-		return newBid, nil
+	newBid := models.TransportBid{
+		BidID:              fmt.Sprintf("BID-%s", strings.ToUpper(uuid.New().String()[:8])),
+		OriginalRequestIDs: payload.OriginalRequestIDs,
+		FulfilledReplenishmentIDs: payload.FulfilledReplenishmentIDs,
+		ShipmentType:       payload.ShipmentType,
+		BiddingAssignments: payload.BiddingAssignments,
+		Stops:              payload.Stops,
+		Status:             "BIDDING",
+		CreatedAt:          time.Now(),
+		ExpiresAt:          expirationTime,
 	}
 
-	// Thực thi transaction
-	result, err := session.WithTransaction(context.Background(), callback)
+	bidCollection := h.DB.Collection("transport_bids")
+	result, err := bidCollection.InsertOne(context.Background(), newBid)
 	if err != nil {
-		// Nếu có lỗi ở bất kỳ bước nào bên trong callback, transaction sẽ tự động được rollback
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failed", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create transport bid"})
 		return
 	}
 
-	// Transaction thành công, `result` chính là `newBid` đã được trả về từ callback
-	createdBid := result.(models.TransportBid)
+	// Gán lại ID đã được tạo để trả về
+	newBid.ID = result.InsertedID.(primitive.ObjectID)
 
 	// Gửi thông báo WebSocket đến các tài xế được mời thầu
 	notification := map[string]interface{}{
 		"event": "new_transport_bid",
-		"bid":   createdBid,
+		"bid":   newBid,
 	}
 	notificationJSON, _ := json.Marshal(notification)
 	for _, assignment := range payload.BiddingAssignments {
 		h.Hub.Send(assignment.DriverID, notificationJSON)
 	}
 
-	c.JSON(http.StatusCreated, createdBid)
+	c.JSON(http.StatusCreated, newBid)
 }
 
 // GetMyBids lấy danh sách các gói thầu mà tài xế đang đăng nhập được mời.
@@ -195,10 +160,38 @@ func (h *BidHandler) ConfirmBid(c *gin.Context) {
 	err := bidCollection.FindOne(context.Background(), initialFilter).Decode(&bidToConfirm)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			c.JSON(http.StatusConflict, gin.H{"error": "This bid is no longer available for confirmation."})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Bid not found, not available for you, or no longer open for confirmation."})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking bid availability."})
+		return
+	}
+
+	if time.Now().After(bidToConfirm.ExpiresAt) {
+		// Nếu gói thầu đã hết hạn nhưng status vẫn là BIDDING, chúng ta có thể cập nhật nó ở đây
+		if bidToConfirm.Status == "BIDDING" {
+			bidCollection.UpdateOne(context.Background(), bson.M{"bidID": bidID}, bson.M{"$set": bson.M{"status": "EXPIRED"}})
+		}
+		c.JSON(http.StatusConflict, gin.H{"error": "This bid has expired."})
+		return
+	}
+
+	if bidToConfirm.Status != "BIDDING" {
+		// Status có thể là CONFIRMED, CANCELED, EXPIRED, ...
+		c.JSON(http.StatusConflict, gin.H{"error": "This bid has already been confirmed by another driver."})
+		return
+	}
+
+	// 1.4: Kiểm tra xem tài xế này có được mời thầu không
+	isAssigned := false
+	for _, assignment := range bidToConfirm.BiddingAssignments {
+		if assignment.DriverID == driverID {
+			isAssigned = true
+			break
+		}
+	}
+	if !isAssigned {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not assigned to this bid."})
 		return
 	}
 
@@ -213,7 +206,7 @@ func (h *BidHandler) ConfirmBid(c *gin.Context) {
 
 	// --- BƯỚC 2: LOGIC "AI NHANH HƠN" (CẬP NHẬT NGUYÊN TỬ) ---
 	// Chỉ cập nhật nếu bidID và status vẫn là "BIDDING"
-	atomicFilter := bson.M{"bidID": bidID, "status": "BIDDING"}
+	atomicFilter := bson.M{"bidID": bidID, "status": "BIDDING", "expiresAt": bson.M{"$gt": time.Now()}}
 	update := bson.M{
 		"$set": bson.M{
 			"status":             "CONFIRMED",
@@ -324,6 +317,28 @@ func (h *BidHandler) ConfirmBid(c *gin.Context) {
 	}
 
 	// --- BƯỚC 6: CẬP NHẬT TRẠNG THÁI OFF-CHAIN CUỐI CÙNG ---
+	// 6.1: Cập nhật Dispatch Requests thành "PROCESSED"
+	if len(bidToConfirm.OriginalRequestIDs) > 0 {
+		dispatchCollection := h.DB.Collection("dispatch_requests")
+		dispatchFilter := bson.M{"requestID": bson.M{"$in": bidToConfirm.OriginalRequestIDs}}
+		dispatchUpdate := bson.M{"$set": bson.M{"status": "PROCESSED"}}
+		_, err := dispatchCollection.UpdateMany(context.Background(), dispatchFilter, dispatchUpdate)
+		if err != nil {
+			log.Printf("CRITICAL: Failed to update status for original Dispatch Requests: %v", err)
+		}
+	}
+
+	// 6.2: Cập nhật Replenishment Requests thành "FULFILLED"
+	if len(bidToConfirm.FulfilledReplenishmentIDs) > 0 {
+		replenishmentCollection := h.DB.Collection("replenishment_requests")
+		repFilter := bson.M{"requestID": bson.M{"$in": bidToConfirm.FulfilledReplenishmentIDs}}
+		repUpdate := bson.M{"$set": bson.M{"status": "FULFILLED"}}
+		_, err := replenishmentCollection.UpdateMany(context.Background(), repFilter, repUpdate)
+		if err != nil {
+			log.Printf("CRITICAL: Failed to update status for Fulfilled Replenishment Requests: %v", err)
+		}
+	}
+	
 	// Cập nhật trạng thái xe
 	_, err = vehicleCollection.UpdateOne(context.Background(), bson.M{"vehicleID": vehicle.VehicleID}, bson.M{"$set": bson.M{"status": "IN_TRIP"}})
 	if err != nil {
