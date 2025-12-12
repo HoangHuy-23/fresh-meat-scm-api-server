@@ -898,3 +898,26 @@ func generateChildAssetID(sku string) string {
 	randomPart := randString(6)
 	return fmt.Sprintf("%s-%s-%s", prefix, datePart, randomPart)
 }
+
+func (h *AssetHandler) GetAssetByID(c *gin.Context) {
+    assetID := c.Param("assetID")
+
+    if assetID == "" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "assetID is required"})
+        return
+    }
+
+    result, err := h.Fabric.Contract.EvaluateTransaction("GetAsset", assetID)
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found", "details": err.Error()})
+        return
+    }
+
+    // Treat explicit null or empty result as "not found"
+    if result == nil || len(result) == 0 || string(result) == "null" {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+        return
+    }
+
+    c.Data(http.StatusOK, "application/json", result)
+}

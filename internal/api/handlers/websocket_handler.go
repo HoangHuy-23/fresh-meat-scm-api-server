@@ -60,26 +60,33 @@ func (h *WebSocketHandler) ServeWs(c *gin.Context) {
 		conn.Close()
 	}()
 
-	// 4. Thiết lập cơ chế xử lý Pong (Heartbeat)
-	// Đặt thời gian chờ tối đa để nhận một tin nhắn pong từ client.
+	// BƯỚC 1: Thiết lập thời gian chờ đọc ban đầu
 	conn.SetReadDeadline(time.Now().Add(pongWait))
-	// Khi nhận được một tin nhắn pong, hãy reset lại thời gian chờ.
-	// Khi nhận được một tin nhắn PING từ client, chúng ta reset lại deadline.
-	// Thư viện gorilla/websocket sẽ tự động gửi lại PONG.
-	conn.SetPingHandler(func(string) error {
-		log.Printf("Received PING from %s, extending deadline", userID)
-		conn.SetReadDeadline(time.Now().Add(pongWait))
-		return nil
-	})
 
 	// Khởi chạy Vòng Lặp Đọc (Read Loop)
 	for {
-		_, _, err := conn.ReadMessage()
+		// Đọc một tin nhắn bất kỳ từ client
+		msgType, msg, err := conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Unexpected close error: %v", err)
+			// Thêm CloseNormalClosure vào danh sách các lỗi được mong đợi để không log ra khi client chủ động đóng
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure) {
+				log.Printf("An actual unexpected close error occurred: %v", err)
 			}
 			break
 		}
+
+		// BƯỚC 2: ĐÂY LÀ DÒNG QUAN TRỌNG NHẤT
+		// Reset lại deadline mỗi khi chúng ta nhận được một tin nhắn thành công.
+		// Điều này báo cho server biết client vẫn còn "sống".
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+
+		// BƯỚC 3: Xử lý tin nhắn heartbeat từ client
+		// Nếu đó là tin nhắn "ping", chúng ta chỉ cần bỏ qua và tiếp tục vòng lặp.
+		if msgType == websocket.TextMessage && string(msg) == "\"ping\"" {
+			continue 
+		}
+
+		// Nếu không phải là tin nhắn ping, hãy xử lý nó (nếu cần)
+		// Ví dụ: log.Printf("Received data message from %s: %s", userID, string(msg))
 	}
 }
