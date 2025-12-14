@@ -8,6 +8,8 @@ import (
 	"strings"
 	"fresh-meat-scm-api-server/internal/models"
 	"fresh-meat-scm-api-server/internal/socket"
+	"fresh-meat-scm-api-server/internal/blockchain"
+	"encoding/json"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,11 +21,11 @@ import (
 type DispatchHandler struct {
 	DB  *mongo.Database
 	Hub *socket.Hub
+	Fabric *blockchain.FabricSetup
 }
 
 type DispatchItemPayload struct {
 	AssetID  string   		 `json:"assetID" binding:"required"`
-	SKU      string   		 `json:"sku" binding:"required"`
 	Quantity models.Quantity `json:"quantity" binding:"required"`
 }
 
@@ -32,16 +34,10 @@ type CreateDispatchRequestPayload struct {
 	Items []DispatchItemPayload `json:"items" binding:"required"`
 }
 
-// CreateDispatchRequest xử lý việc tạo một yêu cầu xuất hàng mới.
+// CreateDispatchRequest xử lý việc tạo yêu cầu và "làm giàu" với SKU.
 func (h *DispatchHandler) CreateDispatchRequest(c *gin.Context) {
 	creatorEnrollmentID := c.GetString("user_enrollment_id")
 	creatorFacilityID := c.GetString("user_facility_id")
-
-	var payload CreateDispatchRequestPayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 
 	// (Tùy chọn) Kiểm tra xem facility của người tạo có tồn tại không
 	facilityCollection := h.DB.Collection("facilities")
@@ -51,26 +47,58 @@ func (h *DispatchHandler) CreateDispatchRequest(c *gin.Context) {
 		return
 	}
 
-	// Tạo mảng items từ payload
-	var items []models.DispatchItemDetail
+	var payload CreateDispatchRequestPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// --- BƯỚC LÀM GIÀU QUAN TRỌNG ---
+	enrichedItems := []models.DispatchItemDetail{}
 	for _, item := range payload.Items {
-		items = append(items, models.DispatchItemDetail{
+		// 1. Gọi chaincode để lấy thông tin asset
+		// Dùng identity của server để truy vấn cho nhanh
+		assetJSON, err := h.Fabric.Contract.EvaluateTransaction("GetAsset", item.AssetID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Asset with ID '%s' not found on-chain", item.AssetID)})
+			return
+		}
+		
+		// 2. Unmarshal để lấy SKU và kiểm tra quyền sở hữu
+		var assetData struct {
+			SKU      string `json:"sku"`
+			OwnerOrg string `json:"ownerOrg"`
+		}
+		if err := json.Unmarshal(assetJSON, &assetData); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse asset data"})
+			return
+		}
+		
+		// 3. Kiểm tra xem asset có thực sự thuộc sở hữu của người tạo request không
+		if assetData.OwnerOrg != creatorFacilityID {
+			c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("You are not the owner of asset %s", item.AssetID)})
+			return
+		}
+
+		// 4. Tạo item đã được làm giàu
+		enrichedItems = append(enrichedItems, models.DispatchItemDetail{
 			AssetID:  item.AssetID,
-			SKU:      item.SKU,
+			SKU:      assetData.SKU, // <-- LẤY SKU TỪ CHAINCODE
 			Quantity: item.Quantity,
 		})
 	}
+	// =================================
 
 	newRequest := models.DispatchRequest{
 		RequestID:      fmt.Sprintf("DR-%s", strings.ToUpper(uuid.New().String()[:8])),
-		FromFacilityID: creatorFacilityID, // Tự động lấy từ token của người tạo
-		Items:          items,
+		FromFacilityID: creatorFacilityID,
+		Items:          enrichedItems, // <-- SỬ DỤNG DỮ LIỆU ĐÃ ĐƯỢC LÀM GIÀU
 		Status:         "PENDING",
 		CreatedBy:      creatorEnrollmentID,
 		CreatedAt:      time.Now(),
 	}
 
-	collection := h.DB.Collection("dispatch_requests") // Đổi tên collection
+	collection := h.DB.Collection("dispatch_requests")
 	result, err := collection.InsertOne(context.Background(), newRequest)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create dispatch request"})
@@ -78,6 +106,8 @@ func (h *DispatchHandler) CreateDispatchRequest(c *gin.Context) {
 	}
 
 	newRequest.ID = result.InsertedID.(primitive.ObjectID)
+
+	// ... (gửi webhook) ...
 
 	c.JSON(http.StatusCreated, newRequest)
 }

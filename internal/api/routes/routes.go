@@ -32,7 +32,7 @@ func SetupRouter(
 	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
 	webSocketHandler := &handlers.WebSocketHandler{Hub: wsHub} // <-- KHỞI TẠO WEBSOCKET HANDLER
-	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub} // <-- KHỞI TẠO DISPATCH HANDLER
+	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub, Fabric: fabricSetup} // <-- KHỞI TẠO DISPATCH HANDLER
 	replenishmentHandler := &handlers.ReplenishmentHandler{DB: db, Hub: wsHub} // <-- KHỞI TẠO REPLENISHMENT HANDLER
 	bidHandler := &handlers.BidHandler{DB: db, Hub: wsHub, Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO BID HANDLER
 	vehicleHandler := &handlers.VehicleHandler{DB: db} // <-- KHỞI TẠO VEHICLE HANDLER
