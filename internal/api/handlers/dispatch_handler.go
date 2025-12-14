@@ -190,4 +190,3 @@ func (h *DispatchHandler) GetDispatchRequestByID(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, request)
 }
-

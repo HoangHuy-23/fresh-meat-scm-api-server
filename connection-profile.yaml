@@ -70,9 +70,9 @@ organizations:
     users:
       superadmin:
         cert:
-          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem
+          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem
         key:
-          path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/75f2378c336b094114dc97c0c8a62ec8cc42e871fd1b8c9682091009fc3d95d5_sk
+          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/4e6f15216136f34ada81a831de508a52141cc61b2ed9bb91314924aef7ff0df8_sk
   # Thêm định nghĩa cho RegulatorOrg để SDK biết về nó
   RegulatorOrg:
     mspid: RegulatorOrgMSP
@@ -80,13 +80,13 @@ organizations:
       - peer0.regulator.example.com
     certificateAuthorities:
       - ca.regulator.example.com
-    cryptoPath: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp
+    cryptoPath: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/users/Admin@regulator.example.com/msp
 
 orderers:
   orderer1.meatsupply.example.com:
     url: grpcs://localhost:7050
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com/tls/ca.crt
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com/tls/ca.crt
     grpcOptions:
       ssl-target-name-override: orderer1.meatsupply.example.com
       hostnameOverride: orderer1.meatsupply.example.com
@@ -94,7 +94,7 @@ orderers:
   orderer2.meatsupply.example.com:
     url: grpcs://localhost:8050
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com/tls/ca.crt
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com/tls/ca.crt
     grpcOptions:
       ssl-target-name-override: orderer2.meatsupply.example.com
       hostnameOverride: orderer2.meatsupply.example.com
@@ -102,7 +102,7 @@ orderers:
   orderer3.regulator.example.com:
     url: grpcs://localhost:9050
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer3.regulator.example.com/tls/ca.crt
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer3.regulator.example.com/tls/ca.crt
     grpcOptions:
       ssl-target-name-override: orderer3.regulator.example.com
       hostnameOverride: orderer3.regulator.example.com
@@ -111,7 +111,7 @@ peers:
   peer0.meatsupply.example.com:
     url: grpcs://localhost:7051
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt
     grpcOptions:
       ssl-target-name-override: peer0.meatsupply.example.com
       hostnameOverride: peer0.meatsupply.example.com
@@ -119,7 +119,7 @@ peers:
   peer0.regulator.example.com:
     url: grpcs://localhost:9051
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/peers/peer0.regulator.example.com/tls/ca.crt
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/peers/peer0.regulator.example.com/tls/ca.crt
     grpcOptions:
       ssl-target-name-override: peer0.regulator.example.com
       hostnameOverride: peer0.regulator.example.com
@@ -129,7 +129,7 @@ certificateAuthorities:
     url: https://localhost:7054
     caName: ca.meatsupply.example.com
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/meatsupply/ca-cert.pem
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/meatsupply/ca-cert.pem
     httpOptions:
       verify: false
     registrar:
@@ -140,7 +140,7 @@ certificateAuthorities:
     url: https://localhost:8054
     caName: ca.regulator.example.com
     tlsCACerts:
-      path: /home/hhexe/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/regulator/ca-cert.pem
+      path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/regulator/ca-cert.pem
     httpOptions:
       verify: false
     registrar:

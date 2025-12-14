@@ -855,56 +855,6 @@ func (h *AssetHandler) GetAssetsAtRetailerByStatus(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", result)
 }
 
-// GetAssetsAtWarehouse lấy các lô sản phẩm tại một kho hàng.
-func (h *AssetHandler) GetAssetsAtWarehouse(c *gin.Context) {
-	warehouseID := c.Param("id")
-	enrollmentID := c.GetString("user_enrollment_id")
-
-	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
-		return
-	}
-	defer userGateway.Close()
-	network, _ := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
-	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
-	resultJSON, err := contract.EvaluateTransaction("QueryAssetsAtWarehouse", warehouseID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query assets at warehouse", "details": err.Error()})
-		return
-	}
-	if resultJSON == nil || string(resultJSON) == "null" {
-		c.Data(http.StatusOK, "application/json", []byte("[]"))
-		return
-	}
-	c.Data(http.StatusOK, "application/json", resultJSON)
-}
-
-// GetMyAssetsAtWarehouse lấy các lô sản phẩm tại một kho hàng.
-func (h *AssetHandler) GetMyAssetsAtWarehouse(c *gin.Context) {
-	warehouseID := c.GetString("user_facility_id")
-	enrollmentID := c.GetString("user_enrollment_id")
-	userGateway, err := h.Fabric.GetGatewayForUser(enrollmentID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user gateway", "details": err.Error()})
-		return
-	}
-	defer userGateway.Close()
-
-	network, _ := userGateway.GetNetwork(h.Cfg.Fabric.ChannelName)
-	contract := network.GetContract(h.Cfg.Fabric.ChaincodeName)
-	resultJSON, err := contract.EvaluateTransaction("QueryAssetsAtWarehouse", warehouseID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query assets at warehouse", "details": err.Error()})
-		return
-	}
-	if resultJSON == nil || string(resultJSON) == "null" {
-		c.Data(http.StatusOK, "application/json", []byte("[]"))
-		return
-	}
-	c.Data(http.StatusOK, "application/json", resultJSON)
-}
-
 // QueryAssetsByFacilityAndSKU lấy các lô sản phẩm của một cơ sở theo SKU cụ thể.
 // public API, cần xác thực người dùng
 func (h *AssetHandler) QueryAssetsByFacilityAndSKU(c *gin.Context) {
@@ -947,4 +897,27 @@ func generateChildAssetID(sku string) string {
 
 	randomPart := randString(6)
 	return fmt.Sprintf("%s-%s-%s", prefix, datePart, randomPart)
+}
+
+func (h *AssetHandler) GetAssetByID(c *gin.Context) {
+    assetID := c.Param("assetID")
+
+    if assetID == "" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "assetID is required"})
+        return
+    }
+
+    result, err := h.Fabric.Contract.EvaluateTransaction("GetAsset", assetID)
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found", "details": err.Error()})
+        return
+    }
+
+    // Treat explicit null or empty result as "not found"
+    if result == nil || len(result) == 0 || string(result) == "null" {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+        return
+    }
+
+    c.Data(http.StatusOK, "application/json", result)
 }

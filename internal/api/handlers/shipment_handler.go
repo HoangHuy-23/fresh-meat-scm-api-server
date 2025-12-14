@@ -210,14 +210,14 @@ func (h *ShipmentHandler) ConfirmPickup(c *gin.Context) {
 	}
 	driverToNotify := shipmentInfo.DriverEnrollmentID
 	// =================================================
-	notification := map[string]string{
-		"type":       "pickup_confirmed",
-		"facilityID": facilityID,
-		"shipmentID": shipmentID,
-		"driverID":   driverToNotify,
-		"message":    "Pickup has been confirmed for shipment " + shipmentID,
+	notificationPayload := map[string]interface{}{
+		"event": "pickup_confirmed", // <-- Đổi "type" thành "event"
+		"payload": map[string]string{ // <-- Tạo một map con "payload"
+			"shipmentID": shipmentID,
+			"facilityID": req.FacilityID, // Dùng facilityID từ request body để chắc chắn
+		},
 	}
-	notificationJSON, _ := json.Marshal(notification)
+	notificationJSON, _ := json.Marshal(notificationPayload) // <-- Đổi tên biến cho rõ ràng
 	if err := h.Hub.Send(driverToNotify, notificationJSON); err != nil {
 		log.Printf("Failed to send WebSocket notification: %v", err)
 	}
@@ -304,31 +304,21 @@ func (h *ShipmentHandler) ConfirmDelivery(c *gin.Context) {
 	}
 	var shipmentInfo struct {
 		DriverEnrollmentID string `json:"driverEnrollmentID"`
-		VehiclePlate       string `json:"vehiclePlate"`
-		Status			   string `json:"status"`
 	}
 	if err := json.Unmarshal(shipmentData, &shipmentInfo); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse shipment data"})
 		return
 	}
-	// update vehicle status to AVAILABLE if stop is final delivery
-	if shipmentInfo.Status == "COMPLETED" {
-		vehicleCollection := h.DB.Collection("vehicles")
-		_, err = vehicleCollection.UpdateOne(context.Background(), bson.M{"plateNumber": shipmentInfo.VehiclePlate}, bson.M{"$set": bson.M{"status": "AVAILABLE"}})
-		if err != nil {
-			log.Printf("Failed to update vehicle status: %v", err)
-		}
-	}
 	driverToNotify := shipmentInfo.DriverEnrollmentID
 	// =================================================
-	notification := map[string]string{
-		"type":       "delivery_confirmed",
-		"facilityID": facilityID,
-		"shipmentID": shipmentID,
-		"driverID":   driverToNotify,
-		"message":    "Delivery has been confirmed for shipment " + shipmentID,
+	notificationPayload := map[string]interface{}{
+		"event": "delivery_confirmed", // <-- Đổi "type" thành "event"
+		"payload": map[string]string{ // <-- Tạo một map con "payload"
+			"shipmentID": shipmentID,
+			"facilityID": req.FacilityID,
+		},
 	}
-	notificationJSON, _ := json.Marshal(notification)
+	notificationJSON, _ := json.Marshal(notificationPayload)
 	if err := h.Hub.Send(driverToNotify, notificationJSON); err != nil {
 		log.Printf("Failed to send WebSocket notification: %v", err)
 	}

@@ -88,7 +88,7 @@ func main() {
 
 	// 7. Start server
 	log.Printf("Starting API server on port %s", cfg.Server.Port)
-	if err := router.Run(":" + cfg.Server.Port); err != nil {
+	if err := router.Run("0.0.0.0:" + cfg.Server.Port); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }
