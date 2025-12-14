@@ -72,7 +72,7 @@ organizations:
         cert:
           path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/signcerts/cert.pem
         key:
-          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/71bf1556bf308d57cb2d1bcb884eda575c7c79ed1b50adddfa928575c168bdbc_sk
+          path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp/keystore/4e6f15216136f34ada81a831de508a52141cc61b2ed9bb91314924aef7ff0df8_sk
   # Thêm định nghĩa cho RegulatorOrg để SDK biết về nó
   RegulatorOrg:
     mspid: RegulatorOrgMSP
@@ -84,7 +84,7 @@ organizations:
 
 orderers:
   orderer1.meatsupply.example.com:
-    url: grpcs://host.docker.internal:7050
+    url: grpcs://localhost:7050
     tlsCACerts:
       path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com/tls/ca.crt
     grpcOptions:
@@ -92,7 +92,7 @@ orderers:
       hostnameOverride: orderer1.meatsupply.example.com
 
   orderer2.meatsupply.example.com:
-    url: grpcs://host.docker.internal:8050
+    url: grpcs://localhost:8050
     tlsCACerts:
       path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com/tls/ca.crt
     grpcOptions:
@@ -100,7 +100,7 @@ orderers:
       hostnameOverride: orderer2.meatsupply.example.com
 
   orderer3.regulator.example.com:
-    url: grpcs://host.docker.internal:9050
+    url: grpcs://localhost:9050
     tlsCACerts:
       path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/ordererOrganizations/example.com/orderers/orderer3.regulator.example.com/tls/ca.crt
     grpcOptions:
@@ -109,7 +109,7 @@ orderers:
 
 peers:
   peer0.meatsupply.example.com:
-    url: grpcs://host.docker.internal:7051
+    url: grpcs://localhost:7051
     tlsCACerts:
       path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt
     grpcOptions:
@@ -117,7 +117,7 @@ peers:
       hostnameOverride: peer0.meatsupply.example.com
 
   peer0.regulator.example.com:
-    url: grpcs://host.docker.internal:9051
+    url: grpcs://localhost:9051
     tlsCACerts:
       path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/peerOrganizations/regulator.example.com/peers/peer0.regulator.example.com/tls/ca.crt
     grpcOptions:
@@ -126,7 +126,7 @@ peers:
 
 certificateAuthorities:
   ca.meatsupply.example.com:
-    url: https://host.docker.internal:7054
+    url: https://localhost:7054
     caName: ca.meatsupply.example.com
     tlsCACerts:
       path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/meatsupply/ca-cert.pem
@@ -137,7 +137,7 @@ certificateAuthorities:
       enrollSecret: adminpw
   # Thêm định nghĩa cho CA của RegulatorOrg
   ca.regulator.example.com:
-    url: https://host.docker.internal:8054
+    url: https://localhost:8054
     caName: ca.regulator.example.com
     tlsCACerts:
       path: /home/lean1123/fresh-meat-scm-hyperledger-fabric/network/crypto-config/fabric-ca/regulator/ca-cert.pem

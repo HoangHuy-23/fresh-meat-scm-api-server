@@ -28,7 +28,9 @@ type TransportBid struct {
 	BiddingAssignments []BidAssignment    `bson:"biddingAssignments" json:"biddingAssignments"` 
 	ConfirmedAssignment BidAssignment      `bson:"confirmedAssignment,omitempty" json:"confirmedAssignment"`
 	CreatedAt          time.Time          `bson:"createdAt" json:"createdAt"`
+	ExpiresAt          time.Time          `bson:"expiresAt" json:"expiresAt"`
 	ConfirmedAt        time.Time          `bson:"confirmedAt,omitempty" json:"confirmedAt"`
 	OriginalRequestIDs []string           `bson:"originalRequestIDs" json:"originalRequestIDs"`
+	FulfilledReplenishmentIDs []string     `bson:"fulfilledReplenishmentIDs,omitempty" json:"fulfilledReplenishmentIDs"`
 	ShipmentID         string             `bson:"shipmentID,omitempty" json:"shipmentID"`
 }
