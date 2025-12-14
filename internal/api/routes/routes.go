@@ -55,12 +55,13 @@ func SetupRouter(
 	shipmentHandler := &handlers.ShipmentHandler{Fabric: fabricSetup, Cfg: cfg, DB: db, S3Uploader: s3Uploader, Hub: wsHub}
 	userHandler := &handlers.UserHandler{CAService: caService, Wallet: fabricSetup.Wallet, OrgName: cfg.Fabric.OrgName, DB: db}
 	facilityHandler := &handlers.FacilityHandler{DB: db}
-	webSocketHandler := &handlers.WebSocketHandler{Hub: wsHub}
-	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub}
-	replenishmentHandler := &handlers.ReplenishmentHandler{DB: db, Hub: wsHub}
-	bidHandler := &handlers.BidHandler{DB: db, Hub: wsHub, Fabric: fabricSetup, Cfg: cfg}
-	vehicleHandler := &handlers.VehicleHandler{DB: db}
-	productHandler := &handlers.ProductHandler{Fabric: fabricSetup, Cfg: cfg}
+	webSocketHandler := &handlers.WebSocketHandler{Hub: wsHub} // <-- KHỞI TẠO WEBSOCKET HANDLER
+	dispatchHandler := &handlers.DispatchHandler{DB: db, Hub: wsHub, Fabric: fabricSetup} // <-- KHỞI TẠO DISPATCH HANDLER
+	replenishmentHandler := &handlers.ReplenishmentHandler{DB: db, Hub: wsHub} // <-- KHỞI TẠO REPLENISHMENT HANDLER
+	bidHandler := &handlers.BidHandler{DB: db, Hub: wsHub, Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO BID HANDLER
+	vehicleHandler := &handlers.VehicleHandler{DB: db} // <-- KHỞI TẠO VEHICLE HANDLER
+	productHandler := &handlers.ProductHandler{Fabric: fabricSetup, Cfg: cfg} // <-- KHỞI TẠO PRODUCT HANDLER
+
 
 	apiV1 := router.Group("/api/v1")
 	{
